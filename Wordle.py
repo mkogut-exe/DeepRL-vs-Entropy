@@ -19,14 +19,19 @@ def check_letters_maches(guess, word):
     return result
 
 class Environment:
-    def __init__(self, allowed_words_path, max_tries=6,word_length=5):
+    def __init__(self, allowed_words_path, max_tries=6,word_length=5, word_test=None):
+        self.path_name = allowed_words_path.split('.')[0]
         self.allowed_words = get_data(allowed_words_path)
         self.max_tries = max_tries
         self.try_count = 0
+        self.win = False
         self.word_length = word_length
         self.guesses = np.array([])
         self.guess_maches = []
-        self.word = 'aahed'#np.random.choice(self.allowed_words)
+        if word_test is not None:
+            self.word = word_test
+        else:
+            self.word = np.random.choice(self.allowed_words)
 
     def check_letters_in_word(self, guess):
         return check_letters_maches(guess, self.word)
@@ -37,16 +42,28 @@ class Environment:
             return np.full(5, -1)
         self.guesses = np.append(self.guesses, guess)
         matches=self.check_letters_in_word(guess)
+        if np.array_equal(matches, np.full(5, 2)):
+            self.win = True
+            return matches
         self.guess_maches.append(matches)
+
+        self.win = False
         return matches
 
-    def reset(self):
+    def reset(self, word_test=None, allowed_words_path=None):
         self.try_count = 0
+        self.win = False
+        if allowed_words_path is not None:
+            self.allowed_words = get_data(allowed_words_path)
         self.guesses = np.array([])
-        self.word = np.random.choice(self.allowed_words)
+        self.guess_maches = []
+        if word_test is not None:
+            self.word = word_test
+        else:
+            self.word = np.random.choice(self.allowed_words)
 def manual(path):
     env = Environment(path)
-    print(env.word)
+    print(f'Mistery word: {env.word}')
     while env.try_count < env.max_tries:
         guess = input(f'Enter your guess (remaining tries: {env.max_tries-env.try_count}): ')
         if guess not in env.allowed_words:
@@ -61,4 +78,4 @@ def manual(path):
         print('You lost! The word was: ', env.word)
 
 
-
+#manual('wordle-nyt-allowed-guesses-update-12546.txt')
