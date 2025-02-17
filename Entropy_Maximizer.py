@@ -4,8 +4,9 @@ from collections import defaultdict
 from tqdm import tqdm
 import pickle
 import os
+from multiprocessing import Pool, cpu_count
 
-def replace_value(array, old_value, new_value):#replaces the old value with the new value in the array
+def replace_value(array, old_value, new_value):#Helper function, replaces the old value with the new value in the array
     array[array == old_value] = new_value
     return array
 
@@ -14,6 +15,7 @@ class Entropy_maximizer:#class that maximizes the entropy of the guesses and uss
     def __init__(self, env:Environment, silent=False):
         self.env = env #create an instance of the Environment class
         self.silent = silent#variable that determines if the game is played in silent mode (no print statements)
+        self.sorted_Entropy_list = None
 
 
         #print(env.word)
@@ -30,14 +32,14 @@ class Entropy_maximizer:#class that maximizes the entropy of the guesses and uss
 
     def play_max_entropy(self,target_word=None, debug=False):#function that plays the game using the max entropy of the guesses
 
-        if target_word is None:
+        if target_word is None:#reset the game if no target word is provided random one is chosen
             self.env.reset()
         else:
             self.env.reset(target_word)
         if not self.silent:
             print(self.env.word)
-        matches = self.env.allowed_words
-        while self.env.try_count < self.env.max_tries:
+        matches = self.env.allowed_words#list of words that match the feedback of the guesses
+        while self.env.try_count < self.env.max_tries:#while the number of tries is less than the maximum number of tries
 
             entropies = None
 
@@ -50,7 +52,7 @@ class Entropy_maximizer:#class that maximizes the entropy of the guesses and uss
                 if not self.silent:
                     print(f'\nTurn: {self.env.try_count + 1}')
 
-            if self.env.try_count == 0:
+            if self.env.try_count == 0:#if it's the first guess use the precalculated entropy list form .pkl file if it exists otherwise create one
                 if os.path.exists(f'{self.env.path_name}_Entropy_list.pkl'):
                     if not self.silent:
                         print(f"File {self.env.path_name}_Entropy_list.pkl exists. "
@@ -62,32 +64,32 @@ class Entropy_maximizer:#class that maximizes the entropy of the guesses and uss
                           f"Creating entropy list and saving to the file.")
                     sorted_Entropy_list = self.save_starting_entropy_list()
 
-                self.maximizer_guess(sorted_Entropy_list[0][1])
+                self.maximizer_guess(sorted_Entropy_list[0][1])#make the guess based on the entropy of the initial word list
                 if not self.silent:
                     print(f'    Guess: {sorted_Entropy_list[0][1]}, Entropy: {sorted_Entropy_list[0][0]}')
             else:
-                if self.env.try_count >= 1:
-                    matches=self.better_find_matches(word_list=matches)
-                    guess, entropy, entropies = self.calculate_entropy(matches)
+                if self.env.try_count >= 1:#if it's not the first guess
+                    matches=self.better_find_matches(word_list=matches)#find the words that match the feedback of the guesses
+                    guess, entropy, entropies = self.calculate_entropy(matches)#calculate the entropy of the matching words
 
                     if debug:
                         sorted_entropies = sorted(entropies, key=lambda x: x[0], reverse=True)
                         if not self.silent:
                             for i, (entropy, word) in enumerate(sorted_entropies):
                                 print(f'{i + 1}. {word}: {entropy}')
-                    self.maximizer_guess(guess)
+                    self.maximizer_guess(guess)#make the guess based on the entropy of the matching words
                     if not self.silent:
                         print(f'    Guess: {guess}, Entropy: {entropy}')
 
-        if not self.env.win:
+        if not self.env.win:#if the game last longer than the maximum number of tries, the game is lost
             if not self.silent:
                 print('\nLoss!')
                 print(f'The word was: {self.env.word}')
                 print(f'Matching words with entropies at the end of te game:\n')
                 sorted_entropies=sorted(entropies, key=lambda x: x[0],reverse=True)
-                for i, (entropy, word) in enumerate(sorted_entropies):
+                for i, (entropy, word) in enumerate(sorted_entropies):#print the matching words and their entropies for the last guess
                     print(f'{i + 1}. {word}: {entropy}')
-        return self.env.win, self.env.try_count
+        return self.env.win, self.env.try_count#return the result of the game and the number of tries
 
 
 
@@ -200,10 +202,11 @@ class Entropy_maximizer:#class that maximizes the entropy of the guesses and uss
             pickle.dump(sorted_Entropy_list, f)
         return sorted_Entropy_list
 
-    def load_starting_entropy_list(self):#function that loads the entropy list for the first guess from a file
-        with open(f'{self.env.path_name}_Entropy_list.pkl', 'rb') as f:
-            sorted_Entropy_list = pickle.load(f)
-        return sorted_Entropy_list
+    def load_starting_entropy_list(self):  # function that loads the entropy list for the first guess from a file
+        if self.sorted_Entropy_list is None:
+            with open(f'{self.env.path_name}_Entropy_list.pkl', 'rb') as f:
+                self.sorted_Entropy_list = pickle.load(f)
+        return self.sorted_Entropy_list
     def print_Entropy_list(self):#function that prints the entropy list
         sorted_Entropy_list = self.load_starting_entropy_list()
         print('\n')
@@ -218,39 +221,72 @@ class Entropy_maximizer:#class that maximizes the entropy of the guesses and uss
         for i, (entropy, word) in enumerate(sorted_Entropy_list):
             print(f'{i + 1}. {word}: {entropy}')
 
-    def get_stats(self, save_path=None):#function that plays the game for all the words in the list of allowed words and saves the statistics to a file
-        if save_path and os.path.exists(f'{save_path}.pkl'):#if the file exists, the statistics are loaded from the file
+    def get_stats(self, save_path=None):
+        if save_path and os.path.exists(f'{save_path}.pkl'):
             print(f"Loading stats from {save_path}.pkl")
             with open(f'{save_path}.pkl', 'rb') as f:
-                stats=pickle.load(f)
+                stats = pickle.load(f)
             print(stats)
             return stats
-        results = {}#dictionary that stores the results of the games
-        # Changed to start from 0 to include first-try wins
-        tries_distribution = {i: 0 for i in range(0, self.env.max_tries + 2)}#dictionary that stores the distribution of the number of tries (+2 to include first-try wins at 1 (position)
-                                                                                # and max-tries losses)
+
+        results = {}
+        tries_distribution = {i: 0 for i in range(0, self.env.max_tries + 2)}
         total_games = 0
         wins = 0
 
-        for word in tqdm(self.env.allowed_words):#for each word in the list of allowed words
-            win, tries = self.play_max_entropy(target_word=word)#play the game
-            results[word] = {"win": win, "tries": tries}#store the result of the game
-            total_games += 1#update the number of games
-            if win:
-                wins += 1
-                tries_distribution[tries] += 1#update the distribution of the number of tries
-            else:
-                tries_distribution[self.env.max_tries + 1] += 1#
+        # Process words in smaller batches
+        batch_size = 20
+        n_processes = min(cpu_count(), 14)  # Limit number of processes
 
-        self.game_stats = {#store the statistics
+        # Create word batches
+        word_batches = []
+        for i in range(0, len(self.env.allowed_words), batch_size):
+            batch = self.env.allowed_words[i:i + batch_size]#split the list of allowed words into batches
+            word_batches.append([(word, self.env.path_name) for word in batch])# for each word in the batch, add the word and the name of the file with the allowed words to the list
+
+        with Pool(processes=n_processes) as pool:#create a pool of processes
+            try:
+                for batch in tqdm(word_batches, desc="Processing words"):#for each batch of words
+                    # Process batch in parallel
+                    batch_results = pool.map_async(process_word_parallel, batch).get(timeout=60)#process the batch of words in parallel
+
+                    # Update statistics
+                    for word, win, tries in batch_results:
+                        results[word] = {"win": win, "tries": tries}
+                        total_games += 1
+                        if win:
+                            wins += 1
+                            tries_distribution[tries] += 1
+                        else:
+                            tries_distribution[self.env.max_tries + 1] += 1
+
+                    # Save intermediate results
+                    if save_path:
+                        intermediate_stats = {
+                            "results": results,
+                            "total_games": total_games,
+                            "wins": wins,
+                            "win_rate": wins / total_games * 100 if total_games > 0 else 0,
+                            "tries_distribution": tries_distribution
+                        }
+                        with open(f'{save_path}_intermediate.pkl', 'wb') as f:
+                            pickle.dump(intermediate_stats, f)
+
+            except TimeoutError:
+                print("Processing timeout. Saving partial results.")
+            finally:
+                pool.close()
+                pool.join()
+
+        self.game_stats = {
             "results": results,
             "total_games": total_games,
             "wins": wins,
-            "win_rate": wins / total_games * 100,
+            "win_rate": wins / total_games * 100 if total_games > 0 else 0,
             "tries_distribution": tries_distribution
         }
 
-        if save_path is not None:#save the statistics to a file
+        if save_path:
             print(f"Saving stats to {save_path}.pkl")
             with open(f'{save_path}.pkl', 'wb') as f:
                 pickle.dump(self.game_stats, f)
@@ -258,12 +294,14 @@ class Entropy_maximizer:#class that maximizes the entropy of the guesses and uss
         return self.game_stats
 
 
+def process_word_parallel(args):
+    word, path_name = args
+    # Add .txt extension if not present
+    if not path_name.endswith('.txt'):
+        path_name = f'{path_name}.txt'
+    local_em = Entropy_maximizer(Environment(path_name), silent=True)
+    win, tries = local_em.play_max_entropy(target_word=word)
+    return word, win, tries
 
 
-
-em=Entropy_maximizer(Environment('wordle-nyt-allowed-guesses-update-12546.txt'),silent=False)
-
-#em.play_max_entropy()
-
-#em.get_stats('wordle_stats')
 

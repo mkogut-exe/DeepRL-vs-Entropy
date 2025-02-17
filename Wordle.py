@@ -1,6 +1,6 @@
 import numpy as np
 
-def get_data(path):
+def get_data(path):#Helper function to get the data from the .txt file
     data = np.genfromtxt(path, dtype=str, delimiter=' ')
     return data
 
