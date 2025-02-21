@@ -5,6 +5,7 @@ import torch.optim as optim
 from Wordle import Environment
 import random
 from tqdm import tqdm
+import pickle
 
 #check torch versin and cuda availability
 torch_version = torch.__version__
@@ -60,6 +61,16 @@ class Actor:
         # Optimizers
         self.optimizer_actor = optim.Adam(self.actor.parameters(), lr=learning_rate)
         self.optimizer_critic = optim.Adam(self.critic.parameters(), lr=learning_rate)
+
+        self.stats = {
+            'total_games': 0,
+            'wins': 0,
+            'win_rate': 0,
+            'tries_distribution': {i: 0 for i in range(0, 8)},  # Include 0
+            'results': {}
+        }
+
+
     def save_model(self, path):
         torch.save({
             'actor': self.actor.state_dict(),
@@ -69,6 +80,15 @@ class Actor:
         checkpoint = torch.load(path)
         self.actor.load_state_dict(checkpoint['actor'])
         self.critic.load_state_dict(checkpoint['critic'])
+
+    def save_stats(self, path):
+        with open(path, 'wb') as f:
+            pickle.dump(self.stats, f)
+
+    def load_stats(self, path):
+        with open(path, 'rb') as f:
+            self.stats = pickle.load(f)
+        return self.stats
 
 
 
@@ -253,6 +273,7 @@ class Actor:
                 print(f"{epoch}/{epochs} - Loss actor: {loss_actor:.4f}, Loss critic: {loss_critic:.4f}")
                 wins_in_period = 0
         print("Training finished.Average win rate: ", total_wins / epochs)
+        self.save_model(f'actor_critic_end.pt')
     def few_rewards_train(self, epochs=500, print_freq=50):
         print("Training...")
         total_wins=0
@@ -306,37 +327,44 @@ class Actor:
                     print(f"{epoch}/{epochs} - Loss actor: {loss_actor:.4f}, Loss critic: {loss_critic:.4f}")
                     wins_in_period = 0
         print("Training finished.Average win rate: ", total_wins/epochs)
-    def run(self,path,state):
-        self.load_model(path)
-        action = 0
-        while not self.env.end:
-            action_prob = self.actor(state)
-            action_prob = action_prob * state
-            action_prob = action_prob / torch.sum(action_prob)
-            action = torch.argmax(action_prob).item()
+        self.save_model(f'actor_critic_end.pt')
 
+    def run(self,state):
+        action = 0
+        action_prob = self.actor(state)
+        action_prob = action_prob * state
+        action_prob = action_prob / torch.sum(action_prob)
+        action = torch.argmax(action_prob).item()
         return action
     def run_test(self,path,num_games):#run test on the model
         self.load_model(path)
         total_wins = 0
         total_tries = 0
         # Run test for num_games
-        for game in tqdm(range(num_games)):
+        for _ in tqdm(range(num_games)):
             self.env.reset()
             while not self.env.end:
                 state = self.state()
-                action = self.run(path,state)
+                action = self.run(state)
                 self.env.guess(self.env.allowed_words[action])
-                total_tries += self.env.try_count
-                if self.env.win:
-                    total_wins += 1
+            total_tries += self.env.try_count
+            if self.env.win:
+                total_wins += 1
+                self.stats['wins'] += 1
+            self.stats['total_games'] += 1
+            self.stats['tries_distribution'][self.env.try_count] += 1
+            self.stats['results'][self.env.word] = {'tries': self.env.try_count, 'win': self.env.win}
         avg_tries= total_tries / num_games
         avg_wins = total_wins / num_games
+        self.stats['win_rate'] = avg_wins
+        self.save_stats('actor_critic_stats.pkl')
+        print(f"Average tries: {avg_tries}")
+        print(f"Win rate: {avg_wins}")
         return avg_tries, avg_wins
 
 
 
 
-Actor(Environment('wordle-nyt-allowed-guesses-update-12546.txt'),epsilon=0.1,greedy=0.01 , learning_rate=3e-5,actor_repetition=10, critic_repetition=1).many_rewards_train(epochs=10000,print_freq=500)
-
+A=Actor(Environment('wordle-nyt-allowed-guesses-update-12546.txt'),epsilon=0.1,greedy=0.01 , learning_rate=3e-5,actor_repetition=10, critic_repetition=1)
+A.run_test('actor_critic_9501.pt',5000)
 
