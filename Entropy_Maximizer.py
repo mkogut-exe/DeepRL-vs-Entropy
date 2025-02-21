@@ -6,9 +6,6 @@ import pickle
 import os
 from multiprocessing import Pool, cpu_count
 
-def replace_value(array, old_value, new_value):#Helper function, replaces the old value with the new value in the array
-    array[array == old_value] = new_value
-    return array
 
 
 class Entropy_maximizer:#class that maximizes the entropy of the guesses and usses it to guess the word
@@ -16,15 +13,16 @@ class Entropy_maximizer:#class that maximizes the entropy of the guesses and uss
         self.env = env #create an instance of the Environment class
         self.silent = silent#variable that determines if the game is played in silent mode (no print statements)
         self.sorted_Entropy_list = None
+        if not silent:
+            print(f'Word to guess: {self.env.word}')
 
 
-        #print(env.word)
 
 
     def maximizer_guess(self, guess, debug=False):#function that makes a guess based on the entropy of the guesses
         matches = self.env.guess(guess)
-
-
+        if not self.silent:
+            print(f'Guess: {guess}')
         if debug:
             print(self.env.guesses)
             print(self.env.guess_maches)
@@ -69,7 +67,7 @@ class Entropy_maximizer:#class that maximizes the entropy of the guesses and uss
                     print(f'    Guess: {sorted_Entropy_list[0][1]}, Entropy: {sorted_Entropy_list[0][0]}')
             else:
                 if self.env.try_count >= 1:#if it's not the first guess
-                    matches=self.better_find_matches(word_list=matches)#find the words that match the feedback of the guesses
+                    matches=self.env.find_matches(word_list=matches,silent=self.silent)#find the words that match the feedback of the guesses
                     guess, entropy, entropies = self.calculate_entropy(matches)#calculate the entropy of the matching words
 
                     if debug:
@@ -92,77 +90,6 @@ class Entropy_maximizer:#class that maximizes the entropy of the guesses and uss
         return self.env.win, self.env.try_count#return the result of the game and the number of tries
 
 
-
-    def better_find_matches(self,word_list=None, debug=False):#function that finds the words that match the feedback of the guesses
-        guesses = self.env.guesses.tolist()#list of past guesses
-
-        if word_list is None:#if no list of words is provided, the list of allowed words is used
-            word_list = self.env.allowed_words
-        total_matching = []
-        if len(guesses) == 0:
-            return word_list.tolist()
-
-        zero_letters=set()#set of letters that have been valued 0 in the feedback of the guesses
-        present_letters=set()#set of letters that are in the target word (feedback of the guesses)
-        absent_letters=set()#set of letters that are not in the target word (feedback of the guesses)
-
-        alphabet_array_matches_final = np.zeros(26, dtype=int)#array that stores the number of times each letter has been valued 1 in the feedback in all past guesses
-
-        for t in range(len(self.env.guess_maches)):#for each past guess
-            alphabet_array_matches = np.zeros(26, dtype=int)#temporary array that stores the number of times each letter has been valued 1 in the feedback of the guess
-
-            for i in range(self.env.word_length):#for each letter in the guess
-                if self.env.guess_maches[t][i] >= 1:#if the letter has been valued 1 or 2 in the feedback
-                    alphabet_array_matches[ord(guesses[t][i]) - ord('a')] += 1
-                    present_letters.add(guesses[t][i])#add the letter to the set of present letters
-
-                elif self.env.guess_maches[t][i] == 0 and guesses[t][i] not in present_letters:#if the letter has been valued 0 in the feedback and is not in the set of present letters
-                    zero_letters.add(guesses[t][i])#add the letter to the set of zero letters
-
-            for i in range(len(alphabet_array_matches)):
-                alphabet_array_matches_final[i] = max(alphabet_array_matches_final[i], alphabet_array_matches[i])#update the array that stores the number of times each letter has been valued 1 in the feedback in all past guesses
-
-        if debug:
-            print(f'zero_letters: {zero_letters}')
-            print(f'present_letters: {present_letters}')
-
-        absent_letters=zero_letters - present_letters #set of letters that are not in the target word (feedback of the guesses)
-        if not self.silent:
-            print(f' absent_letters: {absent_letters}')
-        for candidate in word_list:#for each word in the list of suspected matching words
-            if absent_letters.isdisjoint(candidate):#checks if the word has any of the letters that are not in the target word and skips the word if it has
-                alphabet_array_candidate = np.zeros(26, dtype=int)
-
-                candidate_feedback = check_letters_maches(guesses[-1], candidate)
-
-                #get the guaranteed positions feedback of the guess and candidates
-                candidate_correct_position_matches = replace_value(candidate_feedback.copy(), 1, 0)
-                maximizer_correct_position_matches = replace_value(self.env.guess_maches[-1].copy(), 1, 0)
-
-
-
-                if np.array_equal(candidate_correct_position_matches,maximizer_correct_position_matches):#checks if position of the letters in the feedback of the guess is the same as the position of the letters in the feedback of the past guess
-
-                    matching_letters = False
-
-                    for i in range(self.env.word_length):#for each letter in the guess
-
-                        if candidate_feedback[i] > 0:#if the letter has been valued 1 or 2 in the feedback add it to the array
-                            alphabet_array_candidate[ord(guesses[-1][i]) - ord('a')] += 1
-
-
-                    for i in range(len(alphabet_array_candidate)):#for each letter in the alphabet
-
-                        if alphabet_array_candidate[i] >= alphabet_array_matches_final[i]:#checks if the letter has been valued 1 more times than in the feedback of the guess as many times as in the feedback of the past guesses
-                            matching_letters = True
-                        else:
-
-                            break
-
-                    if matching_letters:#if the letters match, the word is added to the list of matching words
-                        total_matching.append(candidate)
-
-        return total_matching#returns the list of matching words
 
     def calculate_entropy(self, words=None):#function that calculates the entropy of the guesses
         Entropy_list = []
@@ -221,7 +148,9 @@ class Entropy_maximizer:#class that maximizes the entropy of the guesses and uss
         for i, (entropy, word) in enumerate(sorted_Entropy_list):
             print(f'{i + 1}. {word}: {entropy}')
 
-    def get_stats(self, save_path=None):
+    # function that plays the game for all the words in the list of allowed words
+
+    def get_stats(self, save_path=None): #IF NO SAVED STATS USE ONLY via EM_stats.py (due to multiprocessing)
         if save_path and os.path.exists(f'{save_path}.pkl'):
             print(f"Loading stats from {save_path}.pkl")
             with open(f'{save_path}.pkl', 'rb') as f:
@@ -303,5 +232,6 @@ def process_word_parallel(args):
     win, tries = local_em.play_max_entropy(target_word=word)
     return word, win, tries
 
-
-
+em=Entropy_maximizer(Environment('wordle-nyt-allowed-guesses-update-12546.txt'), silent=False)
+em.maximizer_guess('zymic')
+print(em.env.allowed_words)
