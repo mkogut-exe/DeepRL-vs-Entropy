@@ -226,15 +226,16 @@ class Actor:
 
             while not self.env.end:
                 old_action, old_action_prob = self.act()
-
+                immediate_reward = torch.zeros(1, device=device)
                 if epoch > print_freq and epoch % print_freq == 1:
                     print(f"\nAction: {self.env.allowed_words[old_action]}, Action prob: {old_action_prob[old_action]:.6f}")
                     if old_action in actions:
+                            immediate_reward-=10
                             print("Repeated action!")
 
                 self.env.guess(self.env.allowed_words[old_action])
 
-                immediate_reward = torch.zeros(1, device=device)
+
                 if self.env.win:
                     immediate_reward = torch.tensor([10.0 - (0.5/step)], device=device)
                 else:
@@ -295,6 +296,7 @@ class Actor:
                         print(
                             f"\nAction: {self.env.allowed_words[old_action]}, Action prob: {old_action_prob[old_action]:.6f}")
                         if old_action in actions:
+
                             print("Repeated action!")
 
 
@@ -303,7 +305,7 @@ class Actor:
                 self.env.guess(self.env.allowed_words[old_action])
 
                 if self.env.win:
-                    total_reward+= 10.0
+                    total_reward+= 1.0
 
                 total_reward-=0.1
                 
@@ -366,5 +368,5 @@ class Actor:
 
 
 A=Actor(Environment('wordle-nyt-allowed-guesses-update-12546.txt'),epsilon=0.1,greedy=0.01 , learning_rate=3e-5,actor_repetition=10, critic_repetition=1)
-A.run_test('actor_critic_9501.pt',5000)
+A.few_rewards_train(10000, print_freq=500)
 
