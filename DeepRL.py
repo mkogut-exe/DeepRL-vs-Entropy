@@ -163,6 +163,12 @@ class Actor:
             loss_critic.backward(retain_graph=True)
             self.optimizer_critic.step()
 
+        with torch.no_grad():
+            initial_critic_value = self.critic(state)
+            next_critic_value = self.critic(next_state)
+            target_value = reward + self.discount * next_critic_value * (1 - game_over)
+            td_error = (target_value - initial_critic_value)
+
         #############################################Actor update#############################################
         # Store initial probabilities
         with torch.no_grad():
@@ -219,25 +225,27 @@ class Actor:
             step = 1  # Reset step counter for each episode
             self.env.reset(word_test=None)
 
-            state = self.state()
+
             total_reward = torch.zeros(1, device=device)
             actions = []
             current_value = torch.zeros(1, device=device)
+            state = self.state()
 
             while not self.env.end:
+
                 old_action, old_action_prob = self.act()
                 immediate_reward = torch.zeros(1, device=device)
+                if old_action in actions:
+                    immediate_reward -= 1
+
                 if epoch > print_freq and epoch % print_freq == 1:
                     print(f"\nAction: {self.env.allowed_words[old_action]}, Action prob: {old_action_prob[old_action]:.6f}")
-                    if old_action in actions:
-                            immediate_reward-=10
-                            print("Repeated action!")
 
                 self.env.guess(self.env.allowed_words[old_action])
 
 
                 if self.env.win:
-                    immediate_reward = torch.tensor([10.0 - (0.5/step)], device=device)
+                    immediate_reward = torch.tensor([1.0 - (0.1/step)], device=device)
                 else:
                     # Reward for correct letters in position
                     immediate_reward = torch.tensor([
@@ -281,8 +289,8 @@ class Actor:
         wins_in_period=0
         for epoch in tqdm(range(epochs)):
             self.env.reset(word_test=None)
-
             state = self.state()
+
             total_reward = 0
             actions = []
             critic_reward=0
@@ -290,14 +298,13 @@ class Actor:
 
                 old_action, old_action_prob = self.act()
 
+
                 if epoch > print_freq:
                     if epoch % print_freq == 1:
 
                         print(
                             f"\nAction: {self.env.allowed_words[old_action]}, Action prob: {old_action_prob[old_action]:.6f}")
-                        if old_action in actions:
 
-                            print("Repeated action!")
 
 
 
@@ -305,21 +312,25 @@ class Actor:
                 self.env.guess(self.env.allowed_words[old_action])
 
                 if self.env.win:
-                    total_reward+= 1.0
+                    immediate_reward = 1.0  # Reward for winning
+                else:
+                    immediate_reward = -0.1  # Penalty per step
 
-                total_reward-=0.1
-                
+                if old_action in actions:
+                    immediate_reward  -= 1
 
                 actions.append(old_action)
 
 
                 next_state = self.state()
-                action, action_prob, critic_reward, loss_actor, loss_critic = self.many_update(state, total_reward, next_state,
+                action, action_prob, critic_reward, loss_actor, loss_critic = self.many_update(state, immediate_reward , next_state,
                                                                                    old_action_prob,
                                                                                    game_over=self.env.end)
+                state = next_state
 
             wins_in_period += self.env.win
             total_wins += self.env.win
+
 
             if epoch > print_freq:
 
@@ -367,6 +378,6 @@ class Actor:
 
 
 
-A=Actor(Environment('wordle-nyt-allowed-guesses-update-12546.txt'),epsilon=0.1,greedy=0.01 , learning_rate=3e-5,actor_repetition=10, critic_repetition=1)
-A.few_rewards_train(10000, print_freq=500)
+A=Actor(Environment('wordle-nyt-allowed-guesses-update-12546.txt'),epsilon=0.1,greedy=0.01 , learning_rate=1e-4,actor_repetition=15, critic_repetition=5)
+A.many_rewards_train(10000, print_freq=500)
 

@@ -98,7 +98,10 @@ class Environment:#class that simulates the wordle game
                     maximizer_correct_position_matches = replace_value(self.guess_maches[-1].copy(), 1, 0)
                 else:
                     maximizer_correct_position_matches = np.zeros(self.word_length, dtype=int)
-                    print(f"ERROR NO MATCH, mathces: {self.guess_maches}, last_guess: {self.guesses},target word: {self.word}")
+                    print(f"ERROR NO MATCH, mathces: {self.guess_maches}, last_guess: {self.guesses},target word: {self.word}, turn: {self.try_count}")
+                    if self.guesses[-1] == self.word:
+                        self.win = True
+                        self.end = True
                     break
 
 
