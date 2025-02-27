@@ -228,8 +228,12 @@ class Actor:
 
             total_reward = torch.zeros(1, device=device)
             actions = []
+<<<<<<< Updated upstream:DeepRL.py
             current_value = torch.zeros(1, device=device)
             state = self.state()
+=======
+            #current_value = torch.zeros(1, device=device)
+>>>>>>> Stashed changes:DeepRL_word_vector.py
 
             while not self.env.end:
 
@@ -378,6 +382,12 @@ class Actor:
 
 
 
+<<<<<<< Updated upstream:DeepRL.py
 A=Actor(Environment('wordle-nyt-allowed-guesses-update-12546.txt'),epsilon=0.1,greedy=0.01 , learning_rate=1e-4,actor_repetition=15, critic_repetition=5)
 A.many_rewards_train(10000, print_freq=500)
+=======
+A=Actor(Environment('wordle-nyt-allowed-guesses-update-12546.txt'),epsilon=0.1,greedy=0.01 , learning_rate=3e-5,actor_repetition=10, critic_repetition=1)
+A.stats=A.load_stats('Stats/actor_critic_stats.pkl')
+>>>>>>> Stashed changes:DeepRL_word_vector.py
 
+print(A.stats)

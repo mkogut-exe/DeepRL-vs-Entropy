@@ -19,6 +19,7 @@ class Entropy_maximizer:#class that maximizes the entropy of the guesses and uss
 
 
 
+
     def maximizer_guess(self, guess, debug=False):#function that makes a guess based on the entropy of the guesses
         matches = self.env.guess(guess)
         if not self.silent:
@@ -27,6 +28,7 @@ class Entropy_maximizer:#class that maximizes the entropy of the guesses and uss
             print(self.env.guesses)
             print(self.env.guess_maches)
             print("maximizer_guess")
+
 
     def play_max_entropy(self,target_word=None, debug=False):#function that plays the game using the max entropy of the guesses
 
@@ -233,5 +235,5 @@ def process_word_parallel(args):
     return word, win, tries
 
 em=Entropy_maximizer(Environment('wordle-nyt-allowed-guesses-update-12546.txt'), silent=False)
-em.maximizer_guess('zymic')
+
 print(em.env.allowed_words)

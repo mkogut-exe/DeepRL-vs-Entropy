@@ -48,7 +48,42 @@ class Environment:#class that simulates the wordle game
 
     def check_letters_in_word(self, guess):#checks guess with the word selected at the start of the game
         return check_letters_maches(guess, self.word)
-    
+
+    def get_allowed_letters_by_position(self):
+        """Returns a list of binary vectors indicating allowed letters for each position."""
+        # Initialize all letters as allowed (1) for all positions
+        vectors = []
+        for _ in range(self.word_length):
+            vector = np.ones(26, dtype=int)  # One for each letter of alphabet
+            vectors.append(vector)
+
+        # If no guesses made, return initial vectors
+        if len(self.guesses) == 0:
+            return vectors
+
+        # Process each guess and its feedback
+        for guess, feedback in zip(self.guesses, self.guess_maches):
+            for pos, (letter, match) in enumerate(zip(guess, feedback)):
+                letter_idx = ord(letter) - ord('a')
+
+                # Letter is correct (2) - only this letter allowed
+                if match == 2:
+                    vectors[pos].fill(0)
+                    vectors[pos][letter_idx] = 1
+
+                # Letter is wrong position (1) - remove from current position
+                elif match == 1:
+                    vectors[pos][letter_idx] = 0
+
+                # Letter not in word (0) - remove from all positions if not confirmed
+                elif match == 0:
+                    if not any(other_match > 0 and other_letter == letter
+                               for other_letter, other_match in zip(guess, feedback)):
+                        for vector in vectors:
+                            vector[letter_idx] = 0
+
+        return vectors
+
     def find_matches(self,word_list=None, debug=False,silent=True):#function that finds the words that match the feedback of the guesses
         guesses = self.guesses.tolist()#list of past guesses
 
@@ -130,6 +165,25 @@ class Environment:#class that simulates the wordle game
 
 
         return total_matching#returns the list of matching words
+
+    def get_letter_possibilities_from_matches(self, total_matching):
+        """Returns binary vectors indicating possible letters at each position from matching words."""
+        # Initialize vectors for each position (all zeros)
+        vectors = np.zeros((self.word_length, 26), dtype=int)  # Shape: [5, 26]
+
+        # If no matching words, return zero vectors
+        if not total_matching:
+            return vectors
+
+        # For each matching word
+        for word in total_matching:
+            # For each position in word
+            for pos, letter in enumerate(word):
+                # Mark letter as possible (1) in corresponding position
+                letter_idx = ord(letter) - ord('a')
+                vectors[pos][letter_idx] = 1
+
+        return vectors
 
     def guess(self, guess):
         self.try_count += 1
