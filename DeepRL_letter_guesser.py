@@ -6,7 +6,6 @@ from Wordle import Environment
 import random
 from tqdm import tqdm
 import pickle
-import numpy as np
 import os
 import csv
 
@@ -75,7 +74,7 @@ class Actor:
         }, path)
 
     def load_model(self, path):
-        checkpoint = torch.load(path)
+        checkpoint = torch.load(path, map_location=device)
         self.actor.load_state_dict(checkpoint['actor'])
         self.critic.load_state_dict(checkpoint['critic'])
 
@@ -393,6 +392,41 @@ class Actor:
         self.save_stats('actor_critic_stats.pkl')
         print("Training finished.")
 
+    def continue_training(self, model_path, stats_path=None, epochs=5000, print_freq=500,
+                          learning_rate=None, epsilon=None, actor_repetition=None, critic_repetition=None):
+
+        # Load the saved model
+        self.load_model(model_path)
+        print(f"Loaded model from {model_path}")
+
+        # Load stats if provided
+        if stats_path and os.path.exists(stats_path):
+            self.load_stats(stats_path)
+            win_rate = self.stats['wins'] / self.stats['total_games'] if self.stats['total_games'] > 0 else 0
+            print(f"Loaded stats from {stats_path}: {self.stats['total_games']} games, win rate: {win_rate:.4f}")
+
+        # Update hyperparameters if specified
+        if learning_rate is not None:
+            self.optimizer_actor = optim.Adam(self.actor.parameters(), lr=learning_rate)
+            self.optimizer_critic = optim.Adam(self.critic.parameters(), lr=learning_rate)
+            print(f"Updated learning rate to {learning_rate}")
+
+        if epsilon is not None:
+            self.epsilon = epsilon
+            print(f"Updated epsilon to {epsilon}")
+
+        if actor_repetition is not None:
+            self.actor_repetition = actor_repetition
+            print(f"Updated actor repetition to {actor_repetition}")
+
+        if critic_repetition is not None:
+            self.critic_repetition = critic_repetition
+            print(f"Updated critic repetition to {critic_repetition}")
+
+        # Continue training
+        print(f"Continuing training for {epochs} epochs...")
+        self.train(epochs=epochs, print_freq=print_freq)
+
     def run_test(self, path, num_games):
         self.load_model(path)
         total_wins = 0
@@ -415,4 +449,4 @@ class Actor:
 # Example usage
 env = Environment('wordle-nyt-allowed-guesses-update-12546.txt')
 A = Actor(env, epsilon=0.1, learning_rate=1e-4, actor_repetition=10, critic_repetition=2)
-A.train(epochs=10000, print_freq=10)
+A.continue_training(model_path='actor_critic_10000_word_from_letter.pt', stats_path='actor_critic_stats.pkl', epochs=10000, print_freq=500,)
