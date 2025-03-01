@@ -6,6 +6,9 @@ from Wordle import Environment
 import random
 from tqdm import tqdm
 import pickle
+import numpy as np
+import os
+import csv
 
 # Check torch version and CUDA availability
 torch_version = torch.__version__
@@ -85,11 +88,73 @@ class Actor:
             self.stats = pickle.load(f)
         return self.stats
 
+    def save_training_metrics(self, episode, actor_loss, critic_loss, win_rate, metrics_file='training_metrics.csv'):
+        file_exists = os.path.isfile(metrics_file)
+
+        with open(metrics_file, 'a', newline='') as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(['Episode', 'Actor_Loss', 'Critic_Loss', 'Win_Rate'])
+            writer.writerow([episode, actor_loss, critic_loss, win_rate])
+
     def state(self):
         state = self.env.get_letter_possibilities_from_matches(self.env.find_matches())
         return torch.FloatTensor(state.flatten()).to(device)  # Flatten the 5x26 array
 
-    def act(self):
+    def act_word(self):
+        with torch.no_grad():
+            state = self.state()
+            logits = self.actor(state).view(self.env.word_length, 26)
+            state_reshaped = state.view(self.env.word_length, 26)
+
+            # Apply mask for numerical stability
+            masked_logits = logits + (state_reshaped - 1) * 1e4
+            action_prob = torch.softmax(masked_logits, dim=1)
+
+            # Epsilon-greedy exploration with only matching words
+            matching_words = self.env.find_matches()
+            if not matching_words:  # Fallback if no matching words
+                return random.randrange(len(self.env.allowed_words)), torch.tensor(1e-8, device=device)
+
+            if random.random() < self.epsilon:
+                # Random exploration among matching words only
+                chosen_word = random.choice(matching_words)
+                chosen_idx = self.word_to_idx[chosen_word]
+                return chosen_idx, torch.tensor(self.epsilon / len(matching_words), device=device)
+
+            # Calculate probabilities for each matching word
+            word_probs = []
+            indices = []
+
+            for word in matching_words:
+                word_idx = self.word_to_idx[word]
+                indices.append(word_idx)
+
+                # Calculate probability as product of letter probabilities
+                prob = 1.0
+                for pos, letter in enumerate(word):
+                    letter_idx = ord(letter) - ord('a')
+                    prob *= action_prob[pos, letter_idx].item()
+
+                word_probs.append(prob)
+
+            # Convert to tensor and normalize
+            word_probs = torch.tensor(word_probs, device=device)
+
+            # Handle case where all probs are 0
+            if word_probs.sum() <= 1e-10:
+                chosen_idx = random.choice(indices)
+                return chosen_idx, torch.tensor(1e-8, device=device)
+
+            word_probs = word_probs / word_probs.sum()
+
+            # Sample word according to probabilities
+            chosen_idx_in_list = torch.multinomial(word_probs, 1).item()
+            action = indices[chosen_idx_in_list]
+
+            return action, word_probs[chosen_idx_in_list]
+
+    def act_individual_letter(self):
         with torch.no_grad():
             state = self.state()
             logits = self.actor(state).view(self.env.word_length, 26)
@@ -224,6 +289,11 @@ class Actor:
         batch_losses_actor = []
         batch_losses_critic = []
 
+        # Create or clear the metrics file at the start of training
+        with open('training_metrics.csv', 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['Episode', 'Actor_Loss', 'Critic_Loss', 'Win_Rate'])
+
         for episode in tqdm(range(epochs)):
             self.env.reset()
             state = self.state()
@@ -234,7 +304,7 @@ class Actor:
 
             # Play exactly 6 rounds or until game ends
             for round in range(self.env.max_tries):
-                action, old_prob = self.act()
+                action, old_prob = self.act_individual_letter()
                 matches = self.env.guess(self.env.allowed_words[action])
                 next_state = self.state()
                 done = self.env.end
@@ -247,23 +317,20 @@ class Actor:
                 position_improvement = correct_position - last_correct
                 word_improvement = in_word - last_in_word
 
-                # Base reward calculation
+                # Stronger win rewards and clearer penalties
                 if self.env.win:
-                    reward = 1.0 + (self.env.max_tries - round) * 0.2  # Win reward + bonus for early wins
+                    reward = 10.0 + (self.env.max_tries - round) * 1.0  # Much higher win reward
                 else:
-                    # Rewards for improvements
-                    position_reward = position_improvement * 0.15  # More weight for correct positions
-                    word_reward = word_improvement * 0.1  # Less weight for correct letters in wrong positions
 
-                    # Small baseline penalty for each move
-                    base_penalty = -0.05
+                    position_reward = position_improvement * 0.5
+                    word_reward = word_improvement * 0.3
 
-                    # Calculate final reward
+                    base_penalty = -0.1 if position_improvement == 0 and word_improvement == 0 else -0.05
+
                     reward = position_reward + word_reward + base_penalty
 
-                    # Additional penalty for losing
                     if done and not self.env.win:
-                        reward -= 0.3
+                        reward -= 1.0
 
                 # Update last state
                 last_correct = correct_position
@@ -299,14 +366,18 @@ class Actor:
                     batch_losses_actor.append(loss_actor)
                     batch_losses_critic.append(loss_critic)
 
-            # Print stats
+            # Print stats + save model + save metrics
             if (episode + 1) % print_freq == 0:
                 avg_loss_actor = np.mean(batch_losses_actor) if batch_losses_actor else 0
                 avg_loss_critic = np.mean(batch_losses_critic) if batch_losses_critic else 0
                 win_rate = total_wins / print_freq
-                total_wins = 0
+
+                # Save metrics to file
+                self.save_training_metrics(episode + 1, avg_loss_actor, avg_loss_critic, win_rate)
+
                 print(f"Episode {episode + 1}/{epochs} - Actor Loss: {avg_loss_actor:.4f}, "
                       f"Critic Loss: {avg_loss_critic:.4f}, Win Rate: {win_rate:.4f}")
+                total_wins = 0
                 batch_losses_actor = []
                 batch_losses_critic = []
                 self.save_model(f'actor_critic_{episode + 1}.pt')
@@ -330,7 +401,7 @@ class Actor:
             self.env.reset()
             while not self.env.end:
                 state = self.state()
-                action, _ = self.act()
+                action, _ = self.act_individual_letter()
                 self.env.guess(self.env.allowed_words[action])
             total_tries += self.env.try_count
             if self.env.win:
@@ -343,5 +414,5 @@ class Actor:
 
 # Example usage
 env = Environment('wordle-nyt-allowed-guesses-update-12546.txt')
-A = Actor(env, epsilon=0.1, learning_rate=3e-5, actor_repetition=10, critic_repetition=1)
-A.train(epochs=10000, print_freq=500)
+A = Actor(env, epsilon=0.1, learning_rate=1e-4, actor_repetition=10, critic_repetition=2)
+A.train(epochs=10000, print_freq=10)
