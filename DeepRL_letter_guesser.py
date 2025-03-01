@@ -303,7 +303,7 @@ class Actor:
 
             # Play exactly 6 rounds or until game ends
             for round in range(self.env.max_tries):
-                action, old_prob = self.act_individual_letter()
+                action, old_prob = self.act_word()
                 matches = self.env.guess(self.env.allowed_words[action])
                 next_state = self.state()
                 done = self.env.end
