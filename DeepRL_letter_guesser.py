@@ -151,45 +151,57 @@ class Actor:
         with torch.no_grad():
             state = self.state()
             logits = self.actor(state).view(self.env.word_length, 26)
-            state_reshaped = state.view(self.env.word_length, 26)
+            state_reshaped = state.view(self.env.word_length, 26).bool()
 
-            # Apply mask by setting invalid logits to a large negative value
-            masked_logits = logits + (state_reshaped - 1) * 1e8  # -inf for invalid
-            action_prob = torch.softmax(masked_logits, dim=1)  # Per-position softmax
+            # Ensure each position has at least one valid option
+            row_has_valid = state_reshaped.any(dim=1)
+            if not row_has_valid.all():
+                # Handle invalid rows by allowing all letters as fallback
+                state_reshaped[~row_has_valid] = True
 
-            # Mask impossible letters
-            masked_probs = action_prob * state_reshaped
+            masked_logits = logits.masked_fill(~state_reshaped, -1e10)
+            action_prob = torch.softmax(masked_logits, dim=1)
 
-            # Add small epsilon to prevent zero probabilities
+            # Numerical stability: Add epsilon only to valid positions
             epsilon = 1e-10
-            masked_probs = masked_probs + epsilon
+            masked_probs = action_prob * state_reshaped.float()
+            masked_probs += epsilon * state_reshaped.float()
 
-            # Normalize probabilities
-            normalized_probs = masked_probs / masked_probs.sum(dim=1, keepdim=True)
+            # Safe normalization with numerical checks
+            sum_probs = masked_probs.sum(dim=1, keepdim=True)
+            sum_probs[sum_probs == 0] = 1.0  # Prevent division by zero
+            normalized_probs = masked_probs / sum_probs
 
-            # Try to find valid word
-            for _ in range(10):
-                try:
-                    # Sample letters from valid probabilities
-                    sampled_letters = torch.multinomial(action_prob, num_samples=1).squeeze()
-                    word = ''.join([chr(ord('a') + idx.item()) for idx in sampled_letters])
+            # Verify probabilities are valid
+            if torch.isnan(normalized_probs).any() or (normalized_probs < 0).any():
+                raise ValueError("Invalid probabilities detected after normalization")
 
-                    # Check if word is valid
-                    if word in self.word_to_idx:
-                        action = self.word_to_idx[word]
-                        # Calculate probability correctly (product of chosen letters)
-                        letter_probs = action_prob[torch.arange(5), sampled_letters]
-                        old_action_prob_selected = letter_probs.prod()
-                        return action, old_action_prob_selected
+            # Sampling with validation
+            for _ in range(5):  # Fewer attempts due to better probability handling
+                sampled_letters = torch.multinomial(normalized_probs, num_samples=1).squeeze()
+                word = ''.join([chr(ord('a') + idx.item()) for idx in sampled_letters])
 
-                except RuntimeError:
-                    # If sampling fails, use argmax instead
-                    sampled_letters = torch.argmax(normalized_probs, dim=1)
-                    continue
+                if word in self.word_to_idx:
+                    letter_probs = normalized_probs[torch.arange(self.env.word_length), sampled_letters]
+                    return self.word_to_idx[word], letter_probs.prod()
 
-            # Fallback to random word
-            action = random.randrange(len(self.env.allowed_words))
-            return action, torch.tensor(1e-8, device=device)
+            # Fallback strategies...
+
+            # Fallback 1: Try argmax combination
+            sampled_letters = torch.argmax(normalized_probs, dim=1)
+            word = ''.join([chr(ord('a') + idx.item()) for idx in sampled_letters])
+            if word in self.word_to_idx:
+                letter_probs = normalized_probs[torch.arange(self.env.word_length), sampled_letters]
+                return self.word_to_idx[word], letter_probs.prod()
+
+            # Fallback 2: Random valid word from environment's allowed words
+            valid_words = [w for w in self.env.allowed_words if w in self.word_to_idx]
+            if valid_words:
+                chosen_word = random.choice(valid_words)
+                return self.word_to_idx[chosen_word], torch.tensor(1e-8, device=device)
+
+            # Final fallback: Random action with minimum probability
+            return random.randrange(len(self.env.allowed_words)), torch.tensor(1e-8, device=device)
 
     def batch_update(self, states, actions, rewards, next_states, old_action_probs_selected, dones):
         states = torch.stack(states)
@@ -299,7 +311,7 @@ class Actor:
             last_in_word = 0
 
             for round in range(self.env.max_tries):
-                action, old_prob = self.act_word()
+                action, old_prob = self.act_individual_letter()
                 matches = self.env.guess(self.env.allowed_words[action])
                 next_state = self.state()
                 done = self.env.end
@@ -434,7 +446,7 @@ class Actor:
             self.env.reset()
             while not self.env.end:
                 state = self.state()
-                action, _ = self.act_word()
+                action, _ = self.act_individual_letter()
                 self.env.guess(self.env.allowed_words[action])
             total_tries += self.env.try_count
             if self.env.win:
@@ -448,4 +460,5 @@ class Actor:
 # Example usage
 env = Environment('reduced_set.txt')
 A = Actor(env,batch_size=512, epsilon=0.1, learning_rate=1e-4, actor_repetition=10, critic_repetition=2)
-A.train(epochs=30000, print_freq=500)
+A.train(epochs=40000, print_freq=500)
+######act_individual_letter#####

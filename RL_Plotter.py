@@ -3,7 +3,7 @@ import pandas as pd
 import os
 
 
-def plot_training_metrics(file_path='training_metricsactor_critic_end_reduced_word_40000.csv'):
+def plot_training_metrics(file_path='training_metrics_30k_reduced.csv'):
     # Check if file exists
     if not os.path.exists(file_path):
         print(f"Error: {file_path} not found.")
@@ -31,7 +31,7 @@ def plot_training_metrics(file_path='training_metricsactor_critic_end_reduced_wo
 
     # Set y-axis limits for actor loss (ignore outliers)
     q95_actor = df['Actor_Loss'].quantile(0.95)
-    ax1.set_ylim(-0.4, q95_actor * 1.4)
+    ax1.set_ylim(-1.5, q95_actor * 4)
 
     # Plot critic loss
     ax2.plot(df['Episode'], df['Critic_Loss'], 'r-', alpha=0.3)
@@ -52,7 +52,7 @@ def plot_training_metrics(file_path='training_metricsactor_critic_end_reduced_wo
     ax3.grid(True)
 
     # Add baseline for random guessing
-    ax3.axhline(y=0.42, color='gray', linestyle='--', alpha=0.7, label='Random Baseline')
+    ax3.axhline(y=0.8116, color='gray', linestyle='--', alpha=0.7, label='Random Baseline')
     ax3.legend()
 
     # Set y-axis limits for win rate
