@@ -3,7 +3,7 @@ import pandas as pd
 import os
 
 
-def plot_training_metrics(file_path='training_metrics20000.csv'):
+def plot_training_metrics(file_path='training_metricsactor_critic_end_reduced_word_40000.csv'):
     # Check if file exists
     if not os.path.exists(file_path):
         print(f"Error: {file_path} not found.")
@@ -31,7 +31,7 @@ def plot_training_metrics(file_path='training_metrics20000.csv'):
 
     # Set y-axis limits for actor loss (ignore outliers)
     q95_actor = df['Actor_Loss'].quantile(0.95)
-    ax1.set_ylim(0, q95_actor * 1.1)
+    ax1.set_ylim(-0.4, q95_actor * 1.4)
 
     # Plot critic loss
     ax2.plot(df['Episode'], df['Critic_Loss'], 'r-', alpha=0.3)
@@ -57,7 +57,7 @@ def plot_training_metrics(file_path='training_metrics20000.csv'):
 
     # Set y-axis limits for win rate
     win_max = max(0.3, df['Win_Rate'].max() * 1.1)
-    ax3.set_ylim(0, win_max)
+    ax3.set_ylim(0.7, win_max)
 
     plt.tight_layout()
     plt.savefig(f'{os.path.splitext(file_path)[0]}.png')
