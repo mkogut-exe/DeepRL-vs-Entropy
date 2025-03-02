@@ -407,6 +407,24 @@ class Actor:
         # Continue training - now with append_metrics=True to append to existing file
         print(f"Continuing training for {epochs} epochs...")
         self.train(epochs=epochs, print_freq=print_freq, append_metrics=True)
+        
+    def run_test(self, path, num_games):
+        self.load_model(path)
+        total_wins = 0
+        total_tries = 0
+        for _ in tqdm(range(num_games)):
+            self.env.reset()
+            while not self.env.end:
+                state = self.state()
+                action, _ = self.act_word()
+                self.env.guess(self.env.allowed_words[action])
+            total_tries += self.env.try_count
+            if self.env.win:
+                total_wins += 1
+        avg_tries = total_tries / num_games
+        win_rate = total_wins / num_games
+        print(f"Average tries: {avg_tries}, Win rate: {win_rate}")
+        return avg_tries, win_rate
 
 
 # Example usage
