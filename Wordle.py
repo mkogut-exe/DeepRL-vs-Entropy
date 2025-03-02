@@ -84,11 +84,16 @@ class Environment:#class that simulates the wordle game
 
         return vectors
 
-    def find_matches(self,word_list=None, debug=False,silent=True):#function that finds the words that match the feedback of the guesses
-        guesses = self.guesses.tolist()#list of past guesses
+    def find_matches(self, word_list=None, debug=False, silent=True):
+        guesses = self.guesses.tolist()
 
-        if word_list is None:#if no list of words is provided, the list of allowed words is used
+        if word_list is None:
             word_list = self.allowed_words
+
+        # First check if we've already won
+        if len(guesses) > 0 and guesses[-1] == self.word:
+            return [self.word]  # Return only the correct word if it's been guessed
+
         total_matching = []
         if len(guesses) == 0:
             return word_list.tolist()

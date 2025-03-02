@@ -210,8 +210,8 @@ class Actor:
 
         # Critic update
         with torch.no_grad():
-            current_values = self.critic(states).squeeze()
-            next_values = self.critic(next_states).squeeze()
+            current_values = self.critic(states).squeeze(-1)
+            next_values = self.critic(next_states).squeeze(-1)
             target_values = rewards + self.discount * next_values * (1 - dones)
             td_errors = target_values - current_values
 
@@ -407,7 +407,7 @@ class Actor:
         # Continue training - now with append_metrics=True to append to existing file
         print(f"Continuing training for {epochs} epochs...")
         self.train(epochs=epochs, print_freq=print_freq, append_metrics=True)
-        
+
     def run_test(self, path, num_games):
         self.load_model(path)
         total_wins = 0
@@ -429,5 +429,5 @@ class Actor:
 
 # Example usage
 env = Environment('reduced_set.txt')
-A = Actor(env,batch_size=1024, epsilon=0.1, learning_rate=1e-4, actor_repetition=10, critic_repetition=2)
+A = Actor(env,batch_size=16384, epsilon=0.1, learning_rate=1e-4, actor_repetition=10, critic_repetition=2)
 A.train(epochs=20000, print_freq=500)
