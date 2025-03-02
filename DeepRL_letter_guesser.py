@@ -199,15 +199,6 @@ class Actor:
         old_action_probs_selected = torch.tensor(old_action_probs_selected, device=device, dtype=torch.float32)
         dones = torch.tensor(dones, device=device, dtype=torch.float32)
 
-        """# Print batch information with rewards
-        print("\nBatch details:")
-        print(f"Batch size: {len(actions)}")
-        for i, (action_idx, reward, done) in enumerate(zip(actions, rewards, dones)):
-            guess_word = self.env.allowed_words[action_idx]
-            result = "Won" if done and reward > 0 else "Lost" if done else "In progress"
-            print(f"{i + 1}. Word: {guess_word}, Reward: {reward:.2f}, Status: {result}")
-        print("-" * 50)"""
-
         # Critic update
         with torch.no_grad():
             current_values = self.critic(states).squeeze(-1)
@@ -233,31 +224,42 @@ class Actor:
             self.optimizer_actor.zero_grad()
 
             # Get new action probabilities
-            # Get actor prob (no softmax yet)
             prob = self.actor(states)  # Shape: [batch_size, 5*26]
             prob = prob.view(-1, self.env.word_length, 26)  # Reshape to [batch_size, 5, 26]
 
-            # Apply masking to prob (states_reshaped is 1 for valid letters)
+            # Apply masking to prob
             states_reshaped = states.view(-1, self.env.word_length, 26)
             masked_prob = prob + (states_reshaped - 1) * 1e10  # Mask invalid letters
 
             # Apply softmax per position
-            new_action_probs = torch.softmax(masked_prob, dim=2)  # Shape: [batch_size, 5, 26] (softmax over all 5 positions)
-            states_reshaped = states.view(-1, self.env.word_length, 26)  # Shape: [batch_size, 5, 26]
+            new_action_probs = torch.softmax(masked_prob, dim=2)
 
             # Mask and normalize probabilities
             masked_probs = new_action_probs * states_reshaped
             normalized_probs = masked_probs / (masked_probs.sum(dim=2, keepdim=True) + 1e-10)
 
-            # Get probabilities for selected actions
-            word_probs = []
+            # VECTORIZED IMPLEMENTATION: Get probabilities for selected actions
+            batch_size = actions.size(0)
+
+            # Create tensors for letter indices of each word
+            all_letter_indices = torch.zeros((batch_size, self.env.word_length), dtype=torch.long, device=device)
+
+            # Fill letter indices for all words
             for i, action_idx in enumerate(actions):
                 word = self.env.allowed_words[action_idx]
-                letter_indices = torch.tensor([[ord(c) - ord('a') for c in word]], device=device)
-                pos_indices = torch.arange(self.env.word_length, device=device).unsqueeze(0)
-                word_prob = normalized_probs[i, pos_indices, letter_indices].prod()
-                word_probs.append(word_prob)
-            new_action_probs_selected = torch.stack(word_probs)
+                all_letter_indices[i] = torch.tensor([ord(c) - ord('a') for c in word], device=device)
+
+            # Create position indices (same for all words)
+            batch_pos_indices = torch.arange(self.env.word_length, device=device).unsqueeze(0).expand(batch_size, -1)
+
+            # Create batch indices for advanced indexing
+            batch_indices = torch.arange(batch_size, device=device).unsqueeze(1).expand(-1, self.env.word_length)
+
+            # Get probabilities for all letters at once
+            selected_probs = normalized_probs[batch_indices, batch_pos_indices, all_letter_indices]
+
+            # Calculate product along word length dimension
+            new_action_probs_selected = selected_probs.prod(dim=1)
 
             # Compute PPO loss
             importance_ratios = new_action_probs_selected / (old_action_probs_selected + 1e-10)
@@ -280,30 +282,29 @@ class Actor:
         total_wins = 0
         batch_losses_actor = []
         batch_losses_critic = []
-        episode_buffer = []  # Buffer for entire episodes rather than individual transitions
 
-        # Create or append to the metrics file
-        file_mode = 'a' if append_metrics else 'w'
-        with open('training_metrics.csv', file_mode, newline='') as f:
+        # Initialize replay buffer
+        replay_buffer = []
+
+        # Create or append to metrics file
+        with open('training_metrics.csv', 'a' if append_metrics else 'w', newline='') as f:
             writer = csv.writer(f)
-            if not append_metrics:  # Only write header if creating a new file
+            if not append_metrics:
                 writer.writerow(['Episode', 'Actor_Loss', 'Critic_Loss', 'Win_Rate'])
 
         for episode in tqdm(range(epochs)):
             self.env.reset()
             state = self.state()
-            episode_transitions = []
             last_correct = 0
             last_in_word = 0
 
-            # Collect episode data (unchanged)
             for round in range(self.env.max_tries):
                 action, old_prob = self.act_word()
                 matches = self.env.guess(self.env.allowed_words[action])
                 next_state = self.state()
                 done = self.env.end
 
-                # Reward calculation (unchanged)
+                # Calculate reward
                 correct_position = self.env.correct_position
                 in_word = self.env.in_word
                 position_improvement = correct_position - last_correct
@@ -322,7 +323,19 @@ class Actor:
                 last_correct = correct_position
                 last_in_word = in_word
 
-                episode_transitions.append((state, action, reward, next_state, old_prob, done))
+                # Add transition to replay buffer
+                replay_buffer.append((state, action, reward, next_state, old_prob, done))
+
+                # Process in batches when buffer reaches batch size
+                if len(replay_buffer) >= self.batch_size:
+                    batch = replay_buffer[:self.batch_size]
+                    replay_buffer = replay_buffer[self.batch_size:]
+
+                    states, actions, rewards, next_states, old_probs, dones = zip(*batch)
+                    loss_actor, loss_critic = self.batch_update(states, actions, rewards, next_states, old_probs, dones)
+
+                    batch_losses_actor.append(loss_actor)
+                    batch_losses_critic.append(loss_critic)
 
                 if done:
                     break
@@ -336,25 +349,19 @@ class Actor:
             self.stats['tries_distribution'][self.env.try_count] += 1
             self.stats['results'][self.env.word] = {'tries': self.env.try_count, 'win': self.env.win}
 
-            # Process this episode immediately to maintain temporal coherence
-            if episode_transitions:
-                states, actions, rewards, next_states, old_probs, dones = zip(*episode_transitions)
+            # Process remaining samples if enough have accumulated
+            if len(replay_buffer) >= min(1024, self.batch_size):  # Use smaller mini-batches for leftover data
+                mini_batch_size = min(1024, len(replay_buffer))
+                batch = replay_buffer[:mini_batch_size]
+                replay_buffer = replay_buffer[mini_batch_size:]
 
-                # Calculate proper returns for the episode
-                returns = []
-                R = 0
-                for r, d in reversed([(r, d) for _, _, r, _, _, d in episode_transitions]):
-                    R = r + self.discount * R * (1 - d)
-                    returns.insert(0, R)
-
-                returns_tensor = torch.tensor(returns, device=device)
-
-                # Process the episode
+                states, actions, rewards, next_states, old_probs, dones = zip(*batch)
                 loss_actor, loss_critic = self.batch_update(states, actions, rewards, next_states, old_probs, dones)
+
                 batch_losses_actor.append(loss_actor)
                 batch_losses_critic.append(loss_critic)
 
-            # Print stats and save metrics/model as before
+            # Print stats and save metrics
             if (episode + 1) % print_freq == 0:
                 avg_loss_actor = np.mean(batch_losses_actor) if batch_losses_actor else 0
                 avg_loss_critic = np.mean(batch_losses_critic) if batch_losses_critic else 0
@@ -364,12 +371,23 @@ class Actor:
 
                 print(f"Episode {episode + 1}/{epochs} - Actor Loss: {avg_loss_actor:.4f}, "
                       f"Critic Loss: {avg_loss_critic:.4f}, Win Rate: {win_rate:.4f}")
+
                 total_wins = 0
                 batch_losses_actor = []
                 batch_losses_critic = []
+
                 if autosave:
                     self.save_model(f'actor_critic_{episode + 1}.pt')
                 self.save_stats('actor_critic_stats.pkl')
+
+        # Process any remaining samples in the buffer at the end
+        while len(replay_buffer) >= 32:  # Process remaining data in small batches
+            mini_batch_size = min(1024, len(replay_buffer))
+            batch = replay_buffer[:mini_batch_size]
+            replay_buffer = replay_buffer[mini_batch_size:]
+
+            states, actions, rewards, next_states, old_probs, dones = zip(*batch)
+            self.batch_update(states, actions, rewards, next_states, old_probs, dones)
 
         self.save_model('actor_critic_end.pt')
         self.save_stats('actor_critic_stats.pkl')
@@ -429,5 +447,5 @@ class Actor:
 
 # Example usage
 env = Environment('reduced_set.txt')
-A = Actor(env,batch_size=16384, epsilon=0.1, learning_rate=1e-4, actor_repetition=10, critic_repetition=2)
-A.train(epochs=20000, print_freq=500)
+A = Actor(env,batch_size=512, epsilon=0.1, learning_rate=1e-4, actor_repetition=10, critic_repetition=2)
+A.train(epochs=30000, print_freq=500)
