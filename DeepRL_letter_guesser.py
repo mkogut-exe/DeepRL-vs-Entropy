@@ -107,19 +107,13 @@ class Actor:
             state_reshaped = state.view(self.env.word_length, 26)
 
             # Apply mask for numerical stability
-            masked_logits = logits + (state_reshaped - 1) * 1e4
+            masked_logits = logits + (state_reshaped - 1) * 1e8
             action_prob = torch.softmax(masked_logits, dim=1)
 
             # Epsilon-greedy exploration with only matching words
             matching_words = self.env.find_matches()
             if not matching_words:  # Fallback if no matching words
                 return random.randrange(len(self.env.allowed_words)), torch.tensor(1e-8, device=device)
-
-            if random.random() < self.epsilon:
-                # Random exploration among matching words only
-                chosen_word = random.choice(matching_words)
-                chosen_idx = self.word_to_idx[chosen_word]
-                return chosen_idx, torch.tensor(self.epsilon / len(matching_words), device=device)
 
             # Calculate probabilities for each matching word
             word_probs = []
@@ -281,7 +275,7 @@ class Actor:
 
         return np.mean(actor_losses), np.mean(critic_losses)
 
-    def train(self, epochs=500, print_freq=50):
+    def train(self, epochs=500, print_freq=50, autosave=False):
         print("Training...")
         total_wins = 0
         buffer = []
@@ -379,7 +373,8 @@ class Actor:
                 total_wins = 0
                 batch_losses_actor = []
                 batch_losses_critic = []
-                self.save_model(f'actor_critic_{episode + 1}.pt')
+                if autosave:
+                    self.save_model(f'actor_critic_{episode + 1}.pt')
                 self.save_stats('actor_critic_stats.pkl')
 
         # Process remaining buffer data
@@ -447,6 +442,6 @@ class Actor:
 
 
 # Example usage
-env = Environment('wordle-nyt-allowed-guesses-update-12546.txt')
+env = Environment('reduced_set.txt')
 A = Actor(env, epsilon=0.1, learning_rate=1e-4, actor_repetition=10, critic_repetition=2)
-A.continue_training(model_path='actor_critic_10000_word_from_letter.pt', stats_path='actor_critic_stats.pkl', epochs=10000, print_freq=500,)
+A.train(epochs=10000, print_freq=500)
