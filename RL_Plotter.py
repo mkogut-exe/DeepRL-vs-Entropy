@@ -3,7 +3,7 @@ import pandas as pd
 import os
 
 
-def plot_training_metrics(file_path='training_metrics_word_from_letter_10000.csv'):
+def plot_training_metrics(file_path='training_metrics20000.csv'):
     # Check if file exists
     if not os.path.exists(file_path):
         print(f"Error: {file_path} not found.")
@@ -60,8 +60,8 @@ def plot_training_metrics(file_path='training_metrics_word_from_letter_10000.csv
     ax3.set_ylim(0, win_max)
 
     plt.tight_layout()
-    plt.savefig('training_metrics_plot.png')
-    print("Plot saved as 'training_metrics_plot.png'")
+    plt.savefig(f'{os.path.splitext(file_path)[0]}.png')
+    print(f"Plot saved as '{os.path.splitext(file_path)[0]}.png'")
     plt.show()
 
 

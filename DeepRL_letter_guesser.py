@@ -275,61 +275,53 @@ class Actor:
 
         return np.mean(actor_losses), np.mean(critic_losses)
 
-    def train(self, epochs=500, print_freq=50, autosave=False):
+    def train(self, epochs=500, print_freq=50, autosave=False, append_metrics=False):
         print("Training...")
         total_wins = 0
-        buffer = []
         batch_losses_actor = []
         batch_losses_critic = []
+        episode_buffer = []  # Buffer for entire episodes rather than individual transitions
 
-        # Create or clear the metrics file at the start of training
-        with open('training_metrics.csv', 'w', newline='') as f:
+        # Create or append to the metrics file
+        file_mode = 'a' if append_metrics else 'w'
+        with open('training_metrics.csv', file_mode, newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(['Episode', 'Actor_Loss', 'Critic_Loss', 'Win_Rate'])
+            if not append_metrics:  # Only write header if creating a new file
+                writer.writerow(['Episode', 'Actor_Loss', 'Critic_Loss', 'Win_Rate'])
 
         for episode in tqdm(range(epochs)):
             self.env.reset()
             state = self.state()
             episode_transitions = []
-            episode_reward = 0
             last_correct = 0
             last_in_word = 0
 
-            # Play exactly 6 rounds or until game ends
+            # Collect episode data (unchanged)
             for round in range(self.env.max_tries):
                 action, old_prob = self.act_word()
                 matches = self.env.guess(self.env.allowed_words[action])
                 next_state = self.state()
                 done = self.env.end
 
-                # Calculate improved reward
+                # Reward calculation (unchanged)
                 correct_position = self.env.correct_position
                 in_word = self.env.in_word
-
-                # Reward for improvement
                 position_improvement = correct_position - last_correct
                 word_improvement = in_word - last_in_word
 
-                # Stronger win rewards and clearer penalties
                 if self.env.win:
-                    reward = 10.0 + (self.env.max_tries - round) * 1.0  # Much higher win reward
+                    reward = 10.0 + (self.env.max_tries - round) * 1.0
                 else:
-
                     position_reward = position_improvement * 0.5
                     word_reward = word_improvement * 0.3
-
                     base_penalty = -0.1 if position_improvement == 0 and word_improvement == 0 else -0.05
-
                     reward = position_reward + word_reward + base_penalty
-
                     if done and not self.env.win:
                         reward -= 1.0
 
-                # Update last state
                 last_correct = correct_position
                 last_in_word = in_word
 
-                episode_reward += reward
                 episode_transitions.append((state, action, reward, next_state, old_prob, done))
 
                 if done:
@@ -344,28 +336,30 @@ class Actor:
             self.stats['tries_distribution'][self.env.try_count] += 1
             self.stats['results'][self.env.word] = {'tries': self.env.try_count, 'win': self.env.win}
 
-            # Add transitions to buffer
-            buffer.extend(episode_transitions)
+            # Process this episode immediately to maintain temporal coherence
+            if episode_transitions:
+                states, actions, rewards, next_states, old_probs, dones = zip(*episode_transitions)
 
-            # Perform batch update when buffer is large enough
-            if len(buffer) >= self.batch_size:
-                # Process as many complete batches as possible
-                num_complete_batches = len(buffer) // self.batch_size
-                for _ in range(num_complete_batches):
-                    batch = buffer[:self.batch_size]
-                    buffer = buffer[self.batch_size:]
-                    states, actions, rewards, next_states, old_probs, dones = zip(*batch)
-                    loss_actor, loss_critic = self.batch_update(states, actions, rewards, next_states, old_probs, dones)
-                    batch_losses_actor.append(loss_actor)
-                    batch_losses_critic.append(loss_critic)
+                # Calculate proper returns for the episode
+                returns = []
+                R = 0
+                for r, d in reversed([(r, d) for _, _, r, _, _, d in episode_transitions]):
+                    R = r + self.discount * R * (1 - d)
+                    returns.insert(0, R)
 
-            # Print stats + save model + save metrics
+                returns_tensor = torch.tensor(returns, device=device)
+
+                # Process the episode
+                loss_actor, loss_critic = self.batch_update(states, actions, rewards, next_states, old_probs, dones)
+                batch_losses_actor.append(loss_actor)
+                batch_losses_critic.append(loss_critic)
+
+            # Print stats and save metrics/model as before
             if (episode + 1) % print_freq == 0:
                 avg_loss_actor = np.mean(batch_losses_actor) if batch_losses_actor else 0
                 avg_loss_critic = np.mean(batch_losses_critic) if batch_losses_critic else 0
                 win_rate = total_wins / print_freq
 
-                # Save metrics to file
                 self.save_training_metrics(episode + 1, avg_loss_actor, avg_loss_critic, win_rate)
 
                 print(f"Episode {episode + 1}/{epochs} - Actor Loss: {avg_loss_actor:.4f}, "
@@ -377,30 +371,22 @@ class Actor:
                     self.save_model(f'actor_critic_{episode + 1}.pt')
                 self.save_stats('actor_critic_stats.pkl')
 
-        # Process remaining buffer data
-        if len(buffer) >= self.batch_size:
-            states, actions, rewards, next_states, old_probs, dones = zip(*buffer[:self.batch_size])
-            loss_actor, loss_critic = self.batch_update(states, actions, rewards, next_states, old_probs, dones)
-            print(f"Final batch - Actor Loss: {loss_actor:.4f}, Critic Loss: {loss_critic:.4f}")
-
         self.save_model('actor_critic_end.pt')
         self.save_stats('actor_critic_stats.pkl')
         print("Training finished.")
 
     def continue_training(self, model_path, stats_path=None, epochs=5000, print_freq=500,
                           learning_rate=None, epsilon=None, actor_repetition=None, critic_repetition=None):
-
-        # Load the saved model
+        # Load model and stats (unchanged)
         self.load_model(model_path)
         print(f"Loaded model from {model_path}")
 
-        # Load stats if provided
         if stats_path and os.path.exists(stats_path):
             self.load_stats(stats_path)
             win_rate = self.stats['wins'] / self.stats['total_games'] if self.stats['total_games'] > 0 else 0
             print(f"Loaded stats from {stats_path}: {self.stats['total_games']} games, win rate: {win_rate:.4f}")
 
-        # Update hyperparameters if specified
+        # Update hyperparameters if specified (unchanged)
         if learning_rate is not None:
             self.optimizer_actor = optim.Adam(self.actor.parameters(), lr=learning_rate)
             self.optimizer_critic = optim.Adam(self.critic.parameters(), lr=learning_rate)
@@ -418,30 +404,12 @@ class Actor:
             self.critic_repetition = critic_repetition
             print(f"Updated critic repetition to {critic_repetition}")
 
-        # Continue training
+        # Continue training - now with append_metrics=True to append to existing file
         print(f"Continuing training for {epochs} epochs...")
-        self.train(epochs=epochs, print_freq=print_freq)
-
-    def run_test(self, path, num_games):
-        self.load_model(path)
-        total_wins = 0
-        total_tries = 0
-        for _ in tqdm(range(num_games)):
-            self.env.reset()
-            while not self.env.end:
-                state = self.state()
-                action, _ = self.act_individual_letter()
-                self.env.guess(self.env.allowed_words[action])
-            total_tries += self.env.try_count
-            if self.env.win:
-                total_wins += 1
-        avg_tries = total_tries / num_games
-        win_rate = total_wins / num_games
-        print(f"Average tries: {avg_tries}, Win rate: {win_rate}")
-        return avg_tries, win_rate
+        self.train(epochs=epochs, print_freq=print_freq, append_metrics=True)
 
 
 # Example usage
 env = Environment('reduced_set.txt')
-A = Actor(env, epsilon=0.1, learning_rate=1e-4, actor_repetition=10, critic_repetition=2)
-A.train(epochs=10000, print_freq=500)
+A = Actor(env,batch_size=1024, epsilon=0.1, learning_rate=1e-4, actor_repetition=10, critic_repetition=2)
+A.train(epochs=10000, print_freq=10)
