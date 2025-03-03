@@ -37,24 +37,31 @@ class Actor:
         self.allowed_words_tensor = torch.tensor([self.word_to_idx[w] for w in self.env.allowed_words], device=device)
 
         # Actor network
+        # Modify actor/critic networks to include layer normalization:
         self.actor = nn.Sequential(
-            nn.Linear(self.env.word_length*26, 128),
+            nn.Linear(self.env.word_length * 26, 256),
+            nn.LayerNorm(256),
             nn.SiLU(),
-            nn.Linear(128, 128),
+            nn.Linear(256, 256),
+            nn.LayerNorm(256),
             nn.SiLU(),
-            nn.Linear(128, 128),
+            nn.Linear(256, 256),
+            nn.LayerNorm(256),
             nn.SiLU(),
-            nn.Linear(128, self.env.word_length*26),
+            nn.Linear(256, self.env.word_length * 26)
         ).to(device)
 
         # Critic network
         self.critic = nn.Sequential(
-            nn.Linear(self.env.word_length*26, 128),
+            nn.Linear(self.env.word_length * 26, 256),
+            nn.LayerNorm(128),
             nn.SiLU(),
             nn.Linear(128, 128),
+            nn.LayerNorm(128),
             nn.SiLU(),
-            nn.Linear(128, 1)
-        ).to(device)
+            nn.Linear(128, 1),
+            nn.Tanh()  # Constrain value estimates to [-1, 1]
+        )
 
         self.optimizer_actor = optim.Adam(self.actor.parameters(), lr=learning_rate)
         self.optimizer_critic = optim.Adam(self.critic.parameters(), lr=learning_rate)
@@ -323,14 +330,32 @@ class Actor:
                 word_improvement = in_word - last_in_word
 
                 if self.env.win:
-                    reward = 10.0 + (self.env.max_tries - round) * 1.0
+                    # Fixed win reward with time bonus
+                    reward = 1.0 + (self.env.max_tries - self.env.try_count) * 0.2
                 else:
-                    position_reward = position_improvement * 0.5
-                    word_reward = word_improvement * 0.3
-                    base_penalty = -0.1 if position_improvement == 0 and word_improvement == 0 else -0.05
-                    reward = position_reward + word_reward + base_penalty
-                    if done and not self.env.win:
-                        reward -= 1.0
+                    # Positional progress rewards
+                    position_reward = position_improvement * 0.4
+                    correct_letter_reward = word_improvement * 0.2
+
+                    # Negative incentives
+                    step_penalty = -0.15  # Base penalty for using a guess
+                    stagnation_penalty = -0.3 if (position_improvement == 0 and word_improvement == 0) else 0
+
+                    # Combine components
+                    reward = (
+                            position_reward +
+                            correct_letter_reward +
+                            step_penalty +
+                            stagnation_penalty
+                    )
+
+                    # Scale non-win rewards to match win reward range
+                    reward *= 0.5
+
+                # Additional shaping for final state
+                if done and not self.env.win:
+                    reward -= 0.5  # Additional penalty for losing
+                
 
                 last_correct = correct_position
                 last_in_word = in_word
