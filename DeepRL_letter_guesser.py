@@ -60,8 +60,7 @@ class Actor:
             nn.LayerNorm(128),
             nn.SiLU(),
             nn.Linear(128, 1),
-            nn.Tanh().to(device)  # Constrain value estimates to [-1, 1]
-        )
+        ).to(device)
 
         self.optimizer_actor = optim.Adam(self.actor.parameters(), lr=learning_rate)
         self.optimizer_critic = optim.Adam(self.critic.parameters(), lr=learning_rate)
