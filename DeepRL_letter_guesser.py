@@ -53,14 +53,14 @@ class Actor:
 
         # Critic network
         self.critic = nn.Sequential(
-            nn.Linear(self.env.word_length * 26, 256),
+            nn.Linear(self.env.word_length * 26, 128),
             nn.LayerNorm(128),
             nn.SiLU(),
             nn.Linear(128, 128),
             nn.LayerNorm(128),
             nn.SiLU(),
             nn.Linear(128, 1),
-            nn.Tanh()  # Constrain value estimates to [-1, 1]
+            nn.Tanh().to(device)  # Constrain value estimates to [-1, 1]
         )
 
         self.optimizer_actor = optim.Adam(self.actor.parameters(), lr=learning_rate)
