@@ -318,7 +318,7 @@ class Actor:
             last_in_word = 0
 
             for round in range(self.env.max_tries):
-                action, old_prob = self.act_individual_letter()
+                action, old_prob = self.act_word()
                 matches = self.env.guess(self.env.allowed_words[action])
                 next_state = self.state()
                 done = self.env.end
@@ -471,7 +471,7 @@ class Actor:
             self.env.reset()
             while not self.env.end:
                 state = self.state()
-                action, _ = self.act_individual_letter()
+                action, _ = self.act_word()
                 self.env.guess(self.env.allowed_words[action])
             total_tries += self.env.try_count
             if self.env.win:
@@ -486,4 +486,4 @@ class Actor:
 env = Environment('reduced_set.txt')
 A = Actor(env,batch_size=512, epsilon=0.1, learning_rate=1e-4, actor_repetition=10, critic_repetition=2)
 A.train(epochs=40000, print_freq=500)
-######act_individual_letter#####
+######act_word####
