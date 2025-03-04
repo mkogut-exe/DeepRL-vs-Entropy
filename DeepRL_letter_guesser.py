@@ -487,6 +487,6 @@ class Actor:
 
 # Example usage
 env = Environment('reduced_set.txt')
-A = Actor(env,batch_size=512, epsilon=0.1, learning_rate=1e-4, actor_repetition=10, critic_repetition=2)
-A.train(epochs=60000, print_freq=500)
+A = Actor(env,batch_size=1024, epsilon=0.1, learning_rate=1e-4, actor_repetition=4, critic_repetition=1)
+A.train(epochs=40000, print_freq=1000)
 ######act_word####
