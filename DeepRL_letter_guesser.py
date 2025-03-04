@@ -40,10 +40,12 @@ class Actor:
         # Modify actor/critic networks to include layer normalization:
         self.actor = nn.Sequential(
             nn.Linear(self.env.word_length * 26, 256),
-            nn.LayerNorm(256),
             nn.SiLU(),
             nn.Linear(256, 256),
-            nn.LayerNorm(256),
+            nn.SiLU(),
+            nn.Linear(256, 256),
+            nn.SiLU(),
+            nn.Linear(256, 256),
             nn.SiLU(),
             nn.Linear(256, 256),
             nn.LayerNorm(256),
@@ -53,13 +55,15 @@ class Actor:
 
         # Critic network
         self.critic = nn.Sequential(
-            nn.Linear(self.env.word_length * 26, 128),
-            nn.LayerNorm(128),
+            nn.Linear(self.env.word_length * 26, 256),
             nn.SiLU(),
-            nn.Linear(128, 128),
-            nn.LayerNorm(128),
+            nn.Linear(256, 256),
             nn.SiLU(),
-            nn.Linear(128, 1),
+            nn.Linear(256, 256),
+            nn.SiLU(),
+            nn.Linear(256, 256),
+            nn.SiLU(),
+            nn.Linear(256, 1),
         ).to(device)
 
         self.optimizer_actor = optim.Adam(self.actor.parameters(), lr=learning_rate)
@@ -484,5 +488,5 @@ class Actor:
 # Example usage
 env = Environment('reduced_set.txt')
 A = Actor(env,batch_size=512, epsilon=0.1, learning_rate=1e-4, actor_repetition=10, critic_repetition=2)
-A.train(epochs=40000, print_freq=500)
+A.train(epochs=60000, print_freq=500)
 ######act_word####
