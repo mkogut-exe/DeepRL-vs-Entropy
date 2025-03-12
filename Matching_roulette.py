@@ -51,6 +51,5 @@ class Matching_roulette:#class that plays the game bu just choosing the word for
         print(f"Average tries: {tries_avg}")
         print(f"Win rate: {wins_avg}")
         return tries_avg, wins_avg
-MR=Matching_roulette("wordle-nyt-allowed-guesses-update-12546.txt")
-#MR.get_average(5000)
-print(MR.load_stats('Matching_roulette_stats.pkl'))
+MR=Matching_roulette("reduced_set.txt")
+MR.get_average(5000)

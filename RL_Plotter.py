@@ -3,7 +3,7 @@ import pandas as pd
 import os
 
 
-def plot_training_metrics(file_path='training_metrics_30k_reduced.csv'):
+def plot_training_metrics(file_path='training_metrics_actor_critic_end_reduced_word_40k_4x256.csv'):
     # Check if file exists
     if not os.path.exists(file_path):
         print(f"Error: {file_path} not found.")
@@ -31,7 +31,7 @@ def plot_training_metrics(file_path='training_metrics_30k_reduced.csv'):
 
     # Set y-axis limits for actor loss (ignore outliers)
     q95_actor = df['Actor_Loss'].quantile(0.95)
-    ax1.set_ylim(-1.5, q95_actor * 4)
+    ax1.set_ylim(-0.2, q95_actor * 2)
 
     # Plot critic loss
     ax2.plot(df['Episode'], df['Critic_Loss'], 'r-', alpha=0.3)
@@ -42,7 +42,7 @@ def plot_training_metrics(file_path='training_metrics_30k_reduced.csv'):
 
     # Set y-axis limits for critic loss (ignore outliers)
     q95_critic = df['Critic_Loss'].quantile(0.95)
-    ax2.set_ylim(0, q95_critic * 1.1)
+    ax2.set_ylim(0, q95_critic * 1.2)
 
     # Plot win rate
     ax3.plot(df['Episode'], df['Win_Rate'], 'g-', alpha=0.3)
@@ -56,8 +56,8 @@ def plot_training_metrics(file_path='training_metrics_30k_reduced.csv'):
     ax3.legend()
 
     # Set y-axis limits for win rate
-    win_max = max(0.3, df['Win_Rate'].max() * 1.1)
-    ax3.set_ylim(0.7, win_max)
+    win_max = max(0.3, df['Win_Rate'].max() * 1.05)
+    ax3.set_ylim(0.75, win_max)
 
     plt.tight_layout()
     plt.savefig(f'{os.path.splitext(file_path)[0]}.png')

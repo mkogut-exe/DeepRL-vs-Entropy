@@ -8,6 +8,10 @@ from tqdm import tqdm
 import pickle
 import os
 import csv
+from multiprocessing import Pool, cpu_count
+import torch.nn.utils.prune as prune
+
+
 
 # Check torch version and CUDA availability
 torch_version = torch.__version__
@@ -22,15 +26,25 @@ np.random.seed(seed)
 random.seed(seed)
 
 
+def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size):
+    return f"_epochs-{epochs}_actorRep-{actor_repetition}_criticRep-{critic_repetition}_actorSize-{actor_network_size}.pt"
+
+
 class Actor:
     def __init__(self, env: Environment, batch_size=256, discount=0.99, epsilon=0.1, learning_rate=1e-4,
-                 actor_repetition=15, critic_repetition=5):
+                 actor_repetition=15, critic_repetition=5,prune=False, prune_amount=0.1,prune_freq=1000, sparsity_threshold=0.1, random_batch=False):
         self.env = env
         self.discount = discount
         self.batch_size = batch_size
         self.actor_repetition = actor_repetition
         self.critic_repetition = critic_repetition
         self.epsilon = epsilon
+        self.model_id = ''
+        self.sparsity_threshold = sparsity_threshold
+        self.prune_amount = prune_amount
+        self.prune_freq=prune_freq
+        self.prune=prune
+        self.random_batch=random_batch
 
         self.allowed_words_length = len(self.env.allowed_words)
         self.word_to_idx = {word: idx for idx, word in enumerate(self.env.allowed_words)}
@@ -42,6 +56,7 @@ class Actor:
             nn.Linear(self.env.word_length * 26, 256),
             nn.SiLU(),
             nn.Linear(256, 256),
+
             nn.SiLU(),
             nn.Linear(256, 256),
             nn.SiLU(),
@@ -98,7 +113,7 @@ class Actor:
         return self.stats
 
     def save_training_metrics(self, episode, actor_loss, critic_loss, win_rate, metrics_file='training_metrics.csv'):
-        file_exists = os.path.isfile(metrics_file)
+        file_exists = os.path.isfile(metrics_file+self.model_id)
 
         with open(metrics_file, 'a', newline='') as f:
             writer = csv.writer(f)
@@ -109,6 +124,35 @@ class Actor:
     def state(self):
         state = self.env.get_letter_possibilities_from_matches(self.env.find_matches())
         return torch.FloatTensor(state.flatten()).to(device)  # Flatten the 5x26 array
+
+    def prune_actor_network(self):
+        # Apply pruning to actor network
+        for name, module in self.actor.named_modules():
+            if isinstance(module, nn.Linear):
+                # Apply random unstructured pruning to weights
+                prune.random_unstructured(module, name='weight', amount=self.prune_amount)
+
+                # Make pruning permanent
+                prune.remove(module, 'weight')
+
+                # Optionally prune biases with lower intensity
+                if module.bias is not None:
+                    prune.random_unstructured(module, name='bias', amount=self.prune_amount / 2)
+                    prune.remove(module, 'bias')
+
+        return self.get_sparsity()
+
+    def get_sparsity(self):
+        """Calculate the overall sparsity of the actor network"""
+        total_params = 0
+        zero_params = 0
+
+        for name, param in self.actor.named_parameters():
+            if 'weight' in name or 'bias' in name:
+                total_params += param.numel()
+                zero_params += (param == 0).sum().item()
+
+        return zero_params / total_params if total_params > 0 else 0
 
     def act_word(self):
         with torch.no_grad():
@@ -170,12 +214,10 @@ class Actor:
                 state_reshaped[~row_has_valid] = True
 
             masked_logits = logits.masked_fill(~state_reshaped, -1e10)
-            action_prob = torch.softmax(masked_logits, dim=1)
+            action_prob = torch.log_softmax(masked_logits, dim=1)
 
-            # Numerical stability: Add epsilon only to valid positions
-            epsilon = 1e-10
-            masked_probs = action_prob * state_reshaped.float()
-            masked_probs += epsilon * state_reshaped.float()
+
+            masked_probs = action_prob.clone()
 
             # Safe normalization with numerical checks
             sum_probs = masked_probs.sum(dim=1, keepdim=True)
@@ -208,12 +250,13 @@ class Actor:
             valid_words = [w for w in self.env.allowed_words if w in self.word_to_idx]
             if valid_words:
                 chosen_word = random.choice(valid_words)
-                return self.word_to_idx[chosen_word], torch.tensor(1e-8, device=device)
+                return self.word_to_idx[chosen_word], torch.tensor(1e-4, device=device)
 
             # Final fallback: Random action with minimum probability
-            return random.randrange(len(self.env.allowed_words)), torch.tensor(1e-8, device=device)
+            return random.randrange(len(self.env.allowed_words)), torch.tensor(1e-4, device=device)
 
     def batch_update(self, states, actions, rewards, next_states, old_action_probs_selected, dones):
+        random=self.random_batch
         states = torch.stack(states)
         actions = torch.tensor(actions, device=device, dtype=torch.long)
         rewards = torch.tensor(rewards, device=device, dtype=torch.float32)
@@ -221,7 +264,7 @@ class Actor:
         old_action_probs_selected = torch.tensor(old_action_probs_selected, device=device, dtype=torch.float32)
         dones = torch.tensor(dones, device=device, dtype=torch.float32)
 
-        # Critic update
+        # Critic update - always use full batch
         with torch.no_grad():
             current_values = self.critic(states).squeeze(-1)
             next_values = self.critic(next_states).squeeze(-1)
@@ -241,16 +284,31 @@ class Actor:
         # Actor update
         actor_losses = []
         td_errors_detached = td_errors.detach()
+        batch_size = len(states)
+        sample_size = 256  # Sample size for random sampling
 
         for _ in range(self.actor_repetition):
             self.optimizer_actor.zero_grad()
 
+            # If random=True, sample a subset of examples for this iteration
+            if random and batch_size > sample_size:
+                indices = torch.randperm(batch_size, device=device)[:sample_size]
+                batch_states = states[indices]
+                batch_actions = actions[indices]
+                batch_td_errors = td_errors_detached[indices]
+                batch_old_probs = old_action_probs_selected[indices]
+            else:
+                batch_states = states
+                batch_actions = actions
+                batch_td_errors = td_errors_detached
+                batch_old_probs = old_action_probs_selected
+
             # Get new action probabilities
-            prob = self.actor(states)  # Shape: [batch_size, 5*26]
+            prob = self.actor(batch_states)  # Shape: [batch_size, 5*26]
             prob = prob.view(-1, self.env.word_length, 26)  # Reshape to [batch_size, 5, 26]
 
             # Apply masking to prob
-            states_reshaped = states.view(-1, self.env.word_length, 26)
+            states_reshaped = batch_states.view(-1, self.env.word_length, 26)
             masked_prob = prob + (states_reshaped - 1) * 1e10  # Mask invalid letters
 
             # Apply softmax per position
@@ -261,21 +319,18 @@ class Actor:
             normalized_probs = masked_probs / (masked_probs.sum(dim=2, keepdim=True) + 1e-10)
 
             # VECTORIZED IMPLEMENTATION: Get probabilities for selected actions
-            batch_size = actions.size(0)
-
-            # Create tensors for letter indices of each word
-            all_letter_indices = torch.zeros((batch_size, self.env.word_length), dtype=torch.long, device=device)
+            mini_batch_size = batch_actions.size(0)
+            all_letter_indices = torch.zeros((mini_batch_size, self.env.word_length), dtype=torch.long, device=device)
 
             # Fill letter indices for all words
-            for i, action_idx in enumerate(actions):
+            for i, action_idx in enumerate(batch_actions):
                 word = self.env.allowed_words[action_idx]
                 all_letter_indices[i] = torch.tensor([ord(c) - ord('a') for c in word], device=device)
 
-            # Create position indices (same for all words)
-            batch_pos_indices = torch.arange(self.env.word_length, device=device).unsqueeze(0).expand(batch_size, -1)
-
-            # Create batch indices for advanced indexing
-            batch_indices = torch.arange(batch_size, device=device).unsqueeze(1).expand(-1, self.env.word_length)
+            # Create position indices
+            batch_pos_indices = torch.arange(self.env.word_length, device=device).unsqueeze(0).expand(mini_batch_size,
+                                                                                                      -1)
+            batch_indices = torch.arange(mini_batch_size, device=device).unsqueeze(1).expand(-1, self.env.word_length)
 
             # Get probabilities for all letters at once
             selected_probs = normalized_probs[batch_indices, batch_pos_indices, all_letter_indices]
@@ -284,11 +339,11 @@ class Actor:
             new_action_probs_selected = selected_probs.prod(dim=1)
 
             # Compute PPO loss
-            importance_ratios = new_action_probs_selected / (old_action_probs_selected + 1e-10)
+            importance_ratios = new_action_probs_selected / (batch_old_probs + 1e-10)
             clipped_ratios = torch.clamp(importance_ratios, 1 - self.epsilon, 1 + self.epsilon)
             loss = torch.min(
-                importance_ratios * td_errors_detached,
-                clipped_ratios * td_errors_detached
+                importance_ratios * batch_td_errors,
+                clipped_ratios * batch_td_errors
             )
             actor_loss = -loss.mean()
 
@@ -299,8 +354,13 @@ class Actor:
 
         return np.mean(actor_losses), np.mean(critic_losses)
 
-    def train(self, epochs=500, print_freq=50, autosave=False, append_metrics=False):
+    def train(self, epochs=500, print_freq=50, autosave=False, append_metrics=False, prune_amount=0.1,prune_freq=1000, sparsity_threshold=0.1, prune=False):
         print("Training...")
+        self.prune_amount = prune_amount
+        self.prune_freq = prune_freq
+        self.sparsity_threshold = sparsity_threshold
+        self.prune=prune
+        self.model_id=create_model_id(epochs, self.actor_repetition, self.critic_repetition, '4x256')
         total_wins = 0
         batch_losses_actor = []
         batch_losses_critic = []
@@ -333,31 +393,24 @@ class Actor:
                 word_improvement = in_word - last_in_word
 
                 if self.env.win:
-                    # Fixed win reward with time bonus
-                    reward = 1.0 + (self.env.max_tries - self.env.try_count) * 0.2
+                    # Keep exponential bonus for faster wins
+                    time_bonus = 0.4 ** (self.env.try_count - 1)
+                    reward = 2.0 + time_bonus  # Base win reward + scaled bonus
                 else:
-                    # Positional progress rewards
-                    position_reward = position_improvement * 0.4
-                    correct_letter_reward = word_improvement * 0.2
 
-                    # Negative incentives
-                    step_penalty = -0.15  # Base penalty for using a guess
-                    stagnation_penalty = -0.3 if (position_improvement == 0 and word_improvement == 0) else 0
+                    # Make improvements non-negative and cap them
+                    position_improvement = max(0, position_improvement)
+                    word_improvement = max(0, word_improvement)
 
-                    # Combine components
-                    reward = (
-                            position_reward +
-                            correct_letter_reward +
-                            step_penalty +
-                            stagnation_penalty
-                    )
+                    # Apply diminishing returns to limit small improvement rewards
+                    position_reward = min(0.5, position_improvement * 0.3)
+                    word_reward = min(0.3, word_improvement * 0.2)
 
-                    # Scale non-win rewards to match win reward range
-                    reward *= 0.5
+                    # Progress bonus (small but positive)
+                    progress_bonus = 0.05 if (position_improvement > 0 or word_improvement > 0) else 0
 
-                # Additional shaping for final state
-                if done and not self.env.win:
-                    reward -= 0.5  # Additional penalty for losing
+                    # Final positive reward
+                    reward = position_reward + word_reward + progress_bonus
                 
 
                 last_correct = correct_position
@@ -376,6 +429,8 @@ class Actor:
 
                     batch_losses_actor.append(loss_actor)
                     batch_losses_critic.append(loss_critic)
+
+
 
                 if done:
                     break
@@ -417,8 +472,8 @@ class Actor:
                 batch_losses_critic = []
 
                 if autosave:
-                    self.save_model(f'actor_critic_{episode + 1}.pt')
-                self.save_stats('actor_critic_stats.pkl')
+                    self.save_model(f'actor_critic_{episode + 1}{self.model_id}.pt')
+                self.save_stats('actor_critic_stats{self.model_id}.pkl')
 
         # Process any remaining samples in the buffer at the end
         while len(replay_buffer) >= 32:  # Process remaining data in small batches
@@ -429,9 +484,173 @@ class Actor:
             states, actions, rewards, next_states, old_probs, dones = zip(*batch)
             self.batch_update(states, actions, rewards, next_states, old_probs, dones)
 
-        self.save_model('actor_critic_end.pt')
-        self.save_stats('actor_critic_stats.pkl')
+        self.save_model(f'actor_critic_end.pt{self.model_id}')
+        self.save_stats(f'actor_critic_stats.pkl{self.model_id}')
         print("Training finished.")
+
+    def parallel_train(self, epochs=500, print_freq=50, batch_size=20, autosave=False):
+        """Train the Actor-Critic model using parallel environment simulations to collect experiences."""
+        print("Training with parallel experience collection...")
+        total_wins = 0
+        batch_losses_actor = []
+        batch_losses_critic = []
+
+        # Initialize global replay buffer
+        global_replay_buffer = []
+
+        # Create metrics file
+        with open('training_metrics.csv', 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['Episode', 'Actor_Loss', 'Critic_Loss', 'Win_Rate'])
+
+        # Helper function for parallel experience collection
+        def collect_experiences(args):
+            word, model_path = args
+            # Create local environment and load model
+            local_env = Environment(self.env.allowed_words_path)
+            local_actor = Actor(local_env)
+            local_actor.load_model(model_path)
+
+            # Reset with target word
+            local_env.reset(word_test=word)
+            experiences = []
+            state = local_actor.state()
+            last_correct = 0
+            last_in_word = 0
+
+            for round in range(local_env.max_tries):
+                with torch.no_grad():
+                    action, old_prob = local_actor.act_word()
+
+                matches = local_env.guess(local_env.allowed_words[action])
+                next_state = local_actor.state()
+                done = local_env.end
+
+                # Calculate reward (same as in original train method)
+                correct_position = local_env.correct_position
+                in_word = local_env.in_word
+                position_improvement = correct_position - last_correct
+                word_improvement = in_word - last_in_word
+
+                if local_env.win:
+                    time_bonus = 0.4 ** (local_env.try_count - 1)
+                    reward = 2.0 + time_bonus
+                else:
+                    stagnation_penalty = -0.5 if (position_improvement == 0 and word_improvement == 0) else 0
+                    step_penalty = -0.2 * (1 + (local_env.try_count / local_env.max_tries))
+                    reward = (position_improvement * 0.6 + word_improvement * 0.4 + step_penalty + stagnation_penalty)
+
+                last_correct = correct_position
+                last_in_word = in_word
+
+                # Store experience
+                experiences.append((state.cpu(), action, reward, next_state.cpu(), old_prob, done))
+
+                if done:
+                    break
+
+                state = next_state.clone()
+
+            return experiences, local_env.win, local_env.try_count
+
+        # Main training loop
+        for episode in tqdm(range(0, epochs, batch_size)):
+            # Save model for workers to use
+            temp_model_path = f'temp_model_{episode}{self.model_id}.pt'
+            self.save_model(temp_model_path)
+
+            # Sample batch_size words for this episode
+            sample_words = random.sample(self.env.allowed_words.tolist(), min(batch_size, len(self.env.allowed_words)))
+            word_batch = [(word, temp_model_path) for word in sample_words]
+
+            wins_this_batch = 0
+            experiences_this_batch = []
+
+            # Process batch in parallel
+            n_processes = min(cpu_count(), 14)
+            with Pool(processes=n_processes) as pool:
+                try:
+                    batch_results = pool.map(collect_experiences, word_batch)
+
+                    # Process results
+                    for experiences, win, tries in batch_results:
+                        experiences_this_batch.extend(experiences)
+                        wins_this_batch += win
+
+                    # Add experiences to global buffer
+                    global_replay_buffer.extend(experiences_this_batch)
+
+                except Exception as e:
+                    print(f"Error in parallel processing: {e}")
+                finally:
+                    pool.close()
+                    pool.join()
+
+            # Clean up temporary model file
+            if os.path.exists(temp_model_path):
+                os.remove(temp_model_path)
+
+            # Update model with collected experiences
+            while len(global_replay_buffer) >= self.batch_size:
+                batch = global_replay_buffer[:self.batch_size]
+                global_replay_buffer = global_replay_buffer[self.batch_size:]
+
+                # Move tensors back to the right device
+                states = [s.to(device) for s, _, _, _, _, _ in batch]
+                actions = [a for _, a, _, _, _, _ in batch]
+                rewards = [r for _, _, r, _, _, _ in batch]
+                next_states = [ns.to(device) for _, _, _, ns, _, _ in batch]
+                old_probs = [p for _, _, _, _, p, _ in batch]
+                dones = [d for _, _, _, _, _, d in batch]
+
+                # Update model
+                loss_actor, loss_critic = self.batch_update(states, actions, rewards, next_states, old_probs, dones)
+                batch_losses_actor.append(loss_actor)
+                batch_losses_critic.append(loss_critic)
+
+            # Apply pruning periodically
+            if episode > 0 and episode % self.prune_freq == 0 and self.prune:
+                sparsity = self.prune_actor_network()
+                print(f"Applied pruning at episode {episode}, network sparsity: {sparsity:.4f}")
+
+            # Record and print stats
+            if (episode + batch_size) % print_freq == 0 or episode + batch_size >= epochs:
+                avg_loss_actor = np.mean(batch_losses_actor) if batch_losses_actor else 0
+                avg_loss_critic = np.mean(batch_losses_critic) if batch_losses_critic else 0
+                win_rate = wins_this_batch / len(sample_words)
+                total_wins += wins_this_batch
+
+                self.save_training_metrics(episode + batch_size, avg_loss_actor, avg_loss_critic, win_rate)
+
+                print(f"Episode {episode + batch_size}/{epochs} - Actor Loss: {avg_loss_actor:.4f}, "
+                      f"Critic Loss: {avg_loss_critic:.4f}, Win Rate: {win_rate:.4f}")
+
+                batch_losses_actor = []
+                batch_losses_critic = []
+
+                if autosave:
+                    self.save_model(f'actor_critic_{episode + batch_size}{self.model_id}.pt')
+                self.save_stats(f'actor_critic_stats.pkl{self.model_id}')
+
+        # Process any remaining experiences
+        if global_replay_buffer:
+            while len(global_replay_buffer) >= 32:
+                mini_batch_size = min(self.batch_size, len(global_replay_buffer))
+                batch = global_replay_buffer[:mini_batch_size]
+                global_replay_buffer = global_replay_buffer[mini_batch_size:]
+
+                states = [s.to(device) for s, _, _, _, _, _ in batch]
+                actions = [a for _, a, _, _, _, _ in batch]
+                rewards = [r for _, _, r, _, _, _ in batch]
+                next_states = [ns.to(device) for _, _, _, ns, _, _ in batch]
+                old_probs = [p for _, _, _, _, p, _ in batch]
+                dones = [d for _, _, _, _, _, d in batch]
+
+                self.batch_update(states, actions, rewards, next_states, old_probs, dones)
+
+        self.save_model(f'actor_critic_end{self.model_id}.pt')
+        self.save_stats(f'actor_critic_stats{self.model_id}.pkl')
+        print("Parallel training finished.")
 
     def continue_training(self, model_path, stats_path=None, epochs=5000, print_freq=500,
                           learning_rate=None, epsilon=None, actor_repetition=None, critic_repetition=None):
@@ -487,6 +706,6 @@ class Actor:
 
 # Example usage
 env = Environment('reduced_set.txt')
-A = Actor(env,batch_size=1024, epsilon=0.1, learning_rate=1e-4, actor_repetition=4, critic_repetition=1)
-A.train(epochs=40000, print_freq=1000)
+A = Actor(env,batch_size=10, epsilon=0.1, learning_rate=1e-2, actor_repetition=20, critic_repetition=5,random_batch=True)
+A.train(epochs=40000, print_freq=1000,prune=False)
 ######act_word####
