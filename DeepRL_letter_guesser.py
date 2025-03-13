@@ -369,7 +369,7 @@ class Actor:
         replay_buffer = []
 
         # Create or append to metrics file
-        with open('training_metrics.csv', 'a' if append_metrics else 'w', newline='') as f:
+        with open(f'training_metrics{self.model_id}.csv', 'a' if append_metrics else 'w', newline='') as f:
             writer = csv.writer(f)
             if not append_metrics:
                 writer.writerow(['Episode', 'Actor_Loss', 'Critic_Loss', 'Win_Rate'])
@@ -484,8 +484,8 @@ class Actor:
             states, actions, rewards, next_states, old_probs, dones = zip(*batch)
             self.batch_update(states, actions, rewards, next_states, old_probs, dones)
 
-        self.save_model(f'actor_critic_end.pt{self.model_id}')
-        self.save_stats(f'actor_critic_stats.pkl{self.model_id}')
+        self.save_model(f'actor_critic_end{self.model_id}.pt')
+        self.save_stats(f'actor_critic_stats{self.model_id}.pkl')
         print("Training finished.")
 
     def parallel_train(self, epochs=500, print_freq=50, batch_size=20, autosave=False):
@@ -499,7 +499,7 @@ class Actor:
         global_replay_buffer = []
 
         # Create metrics file
-        with open('training_metrics.csv', 'w', newline='') as f:
+        with open(f'training_metrics{self.model_id}.csv', 'w', newline='') as f:
             writer = csv.writer(f)
             writer.writerow(['Episode', 'Actor_Loss', 'Critic_Loss', 'Win_Rate'])
 
@@ -706,6 +706,6 @@ class Actor:
 
 # Example usage
 env = Environment('reduced_set.txt')
-A = Actor(env,batch_size=10, epsilon=0.1, learning_rate=1e-2, actor_repetition=20, critic_repetition=5,random_batch=True)
+A = Actor(env,batch_size=1024, epsilon=0.1, learning_rate=1e-2, actor_repetition=20, critic_repetition=5,random_batch=True)
 A.train(epochs=40000, print_freq=1000,prune=False)
 ######act_word####
