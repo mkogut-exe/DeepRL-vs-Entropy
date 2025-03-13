@@ -26,8 +26,8 @@ np.random.seed(seed)
 random.seed(seed)
 
 
-def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size):
-    return f"_epochs-{epochs}_actorRep-{actor_repetition}_criticRep-{critic_repetition}_actorSize-{actor_network_size}.pt"
+def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size,learning_rate,batch_size):
+    return f"_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr{learning_rate}-Bs{batch_size}"
 
 
 class Actor:
@@ -45,6 +45,7 @@ class Actor:
         self.prune_freq=prune_freq
         self.prune=prune
         self.random_batch=random_batch
+        self.learning_rate = learning_rate
 
         self.allowed_words_length = len(self.env.allowed_words)
         self.word_to_idx = {word: idx for idx, word in enumerate(self.env.allowed_words)}
@@ -81,8 +82,8 @@ class Actor:
             nn.Linear(256, 1),
         ).to(device)
 
-        self.optimizer_actor = optim.Adam(self.actor.parameters(), lr=learning_rate)
-        self.optimizer_critic = optim.Adam(self.critic.parameters(), lr=learning_rate)
+        self.optimizer_actor = optim.Adam(self.actor.parameters(), lr=self.learning_rate)
+        self.optimizer_critic = optim.Adam(self.critic.parameters(), lr=self.learning_rate)
 
         self.stats = {
             'total_games': 0,
@@ -360,7 +361,7 @@ class Actor:
         self.prune_freq = prune_freq
         self.sparsity_threshold = sparsity_threshold
         self.prune=prune
-        self.model_id=create_model_id(epochs, self.actor_repetition, self.critic_repetition, '4x256')
+        self.model_id=create_model_id(epochs=epochs, actor_repetition=self.actor_repetition, critic_repetition=self.critic_repetition, actor_network_size='4x256',learning_rate=self.learning_rate,batch_size=self.batch_size)
         total_wins = 0
         batch_losses_actor = []
         batch_losses_critic = []
@@ -665,9 +666,9 @@ class Actor:
 
         # Update hyperparameters if specified (unchanged)
         if learning_rate is not None:
-            self.optimizer_actor = optim.Adam(self.actor.parameters(), lr=learning_rate)
-            self.optimizer_critic = optim.Adam(self.critic.parameters(), lr=learning_rate)
-            print(f"Updated learning rate to {learning_rate}")
+            self.optimizer_actor = optim.Adam(self.actor.parameters(), lr=self.learning_rate)
+            self.optimizer_critic = optim.Adam(self.critic.parameters(), lr=self.learning_rate)
+            print(f"Updated learning rate to {self.learning_rate}")
 
         if epsilon is not None:
             self.epsilon = epsilon
