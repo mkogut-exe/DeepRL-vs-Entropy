@@ -27,7 +27,7 @@ random.seed(seed)
 
 
 def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size,learning_rate,batch_size):
-    return f"_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr{learning_rate}-Bs{batch_size}"
+    return f"_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
 
 
 class Actor:
@@ -113,10 +113,11 @@ class Actor:
             self.stats = pickle.load(f)
         return self.stats
 
-    def save_training_metrics(self, episode, actor_loss, critic_loss, win_rate, metrics_file='training_metrics.csv'):
-        file_exists = os.path.isfile(metrics_file+self.model_id)
+    def save_training_metrics(self, episode, actor_loss, critic_loss, win_rate, metrics_file='training_metrics'):
+        full_path = f"{metrics_file}{self.model_id}.csv"
+        file_exists = os.path.isfile(full_path)
 
-        with open(metrics_file, 'a', newline='') as f:
+        with open(full_path, 'a', newline='') as f:
             writer = csv.writer(f)
             if not file_exists:
                 writer.writerow(['Episode', 'Actor_Loss', 'Critic_Loss', 'Win_Rate'])
@@ -474,7 +475,7 @@ class Actor:
 
                 if autosave:
                     self.save_model(f'actor_critic_{episode + 1}{self.model_id}.pt')
-                self.save_stats('actor_critic_stats{self.model_id}.pkl')
+                self.save_stats(f'actor_critic_stats{self.model_id}.pkl')
 
         # Process any remaining samples in the buffer at the end
         while len(replay_buffer) >= 32:  # Process remaining data in small batches
@@ -631,7 +632,7 @@ class Actor:
 
                 if autosave:
                     self.save_model(f'actor_critic_{episode + batch_size}{self.model_id}.pt')
-                self.save_stats(f'actor_critic_stats.pkl{self.model_id}')
+                self.save_stats(f'actor_critic_stats{self.model_id}.pkl')
 
         # Process any remaining experiences
         if global_replay_buffer:
