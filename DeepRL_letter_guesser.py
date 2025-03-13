@@ -32,7 +32,7 @@ def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_s
 
 class Actor:
     def __init__(self, env: Environment, batch_size=256, discount=0.99, epsilon=0.1, learning_rate=1e-4,
-                 actor_repetition=15, critic_repetition=5,prune=False, prune_amount=0.1,prune_freq=1000, sparsity_threshold=0.1, random_batch=False):
+                 actor_repetition=15, critic_repetition=5,prune=False, prune_amount=0.1,prune_freq=1000, sparsity_threshold=0.1, random_batch=False,sample_size=256):
         self.env = env
         self.discount = discount
         self.batch_size = batch_size
@@ -45,6 +45,7 @@ class Actor:
         self.prune_freq=prune_freq
         self.prune=prune
         self.random_batch=random_batch
+        self.sample_size = sample_size
         self.learning_rate = learning_rate
 
         self.allowed_words_length = len(self.env.allowed_words)
@@ -259,6 +260,7 @@ class Actor:
 
     def batch_update(self, states, actions, rewards, next_states, old_action_probs_selected, dones):
         random=self.random_batch
+
         states = torch.stack(states)
         actions = torch.tensor(actions, device=device, dtype=torch.long)
         rewards = torch.tensor(rewards, device=device, dtype=torch.float32)
@@ -287,14 +289,13 @@ class Actor:
         actor_losses = []
         td_errors_detached = td_errors.detach()
         batch_size = len(states)
-        sample_size = 256  # Sample size for random sampling
 
         for _ in range(self.actor_repetition):
             self.optimizer_actor.zero_grad()
 
             # If random=True, sample a subset of examples for this iteration
-            if random and batch_size > sample_size:
-                indices = torch.randperm(batch_size, device=device)[:sample_size]
+            if random and batch_size > self.sample_size:
+                indices = torch.randperm(batch_size, device=device)[:self.sample_size]
                 batch_states = states[indices]
                 batch_actions = actions[indices]
                 batch_td_errors = td_errors_detached[indices]
@@ -708,6 +709,6 @@ class Actor:
 
 # Example usage
 env = Environment('reduced_set.txt')
-A = Actor(env,batch_size=1024, epsilon=0.1, learning_rate=1e-2, actor_repetition=20, critic_repetition=5,random_batch=True)
+A = Actor(env,batch_size=1024, epsilon=0.1, learning_rate=1e-1, actor_repetition=100, critic_repetition=20,random_batch=True)
 A.train(epochs=40000, print_freq=1000,prune=False)
 ######act_word####
