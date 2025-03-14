@@ -58,20 +58,6 @@ class Actor:
             nn.Linear(self.env.word_length * 26, 256),
             nn.SiLU(),
             nn.Linear(256, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
             nn.LayerNorm(256),
             nn.SiLU(),
             nn.Linear(256, self.env.word_length * 26)
@@ -80,10 +66,6 @@ class Actor:
         # Critic network
         self.critic = nn.Sequential(
             nn.Linear(self.env.word_length * 26, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
             nn.SiLU(),
             nn.Linear(256, 256),
             nn.SiLU(),
@@ -370,7 +352,7 @@ class Actor:
         self.prune_freq = prune_freq
         self.sparsity_threshold = sparsity_threshold
         self.prune=prune
-        self.model_id=create_model_id(epochs=epochs, actor_repetition=self.actor_repetition, critic_repetition=self.critic_repetition, actor_network_size='8x256',learning_rate=self.learning_rate,batch_size=self.batch_size)
+        self.model_id=create_model_id(epochs=epochs, actor_repetition=self.actor_repetition, critic_repetition=self.critic_repetition, actor_network_size='1x256',learning_rate=self.learning_rate,batch_size=self.batch_size)
         total_wins = 0
         batch_losses_actor = []
         batch_losses_critic = []
