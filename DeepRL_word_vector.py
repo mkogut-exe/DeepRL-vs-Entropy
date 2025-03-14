@@ -57,21 +57,41 @@ class Actor:
 
         # Actor network
         self.actor = nn.Sequential(
-            nn.Linear(self.allowed_words_length, 128),
-        nn.SiLU(),
-        nn.Linear(128, 128),
-        nn.SiLU(),
-        nn.Linear(128,self.allowed_words_length ),
+            nn.Linear(self.allowed_words_length, 256),
+            nn.SiLU(),
+            nn.Linear(256, 256),
+            nn.SiLU(),
+            nn.Linear(256, 256),
+            nn.SiLU(),
+            nn.Linear(256, 256),
+            nn.SiLU(),
+            nn.Linear(256, 256),
+            nn.SiLU(),
+            nn.Linear(256, 256),
+            nn.SiLU(),
+            nn.Linear(256, 256),
+            nn.SiLU(),
+            nn.Linear(256, 256),
+            nn.SiLU(),
+            nn.Linear(256, 256),
+            nn.LayerNorm(256),
+            nn.SiLU(),
+        nn.Linear(256,self.allowed_words_length ),
         nn.Softmax(dim=-1)
         ).to(device)
 
         # Critic network
         self.critic = nn.Sequential(
-            nn.Linear(self.allowed_words_length, 128),
+            nn.Linear(self.allowed_words_length, 256),
             nn.SiLU(),
-            nn.Linear(128, 128),
             nn.SiLU(),
-            nn.Linear(128, 1)
+            nn.Linear(256, 256),
+            nn.SiLU(),
+            nn.Linear(256, 256),
+            nn.SiLU(),
+            nn.Linear(256, 256),
+            nn.SiLU(),
+            nn.Linear(256, 1)
         ).to(device)
 
         self.optimizer_actor = optim.Adam(self.actor.parameters(), lr=self.learning_rate)
