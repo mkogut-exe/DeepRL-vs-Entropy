@@ -637,6 +637,7 @@ class Actor:
                 print(f"Episode {episode + batch_size}/{epochs} - Actor Loss: {avg_loss_actor:.4f}, "
                       f"Critic Loss: {avg_loss_critic:.4f}, Win Rate: {win_rate:.4f}")
 
+
                 batch_losses_actor = []
                 batch_losses_critic = []
 
@@ -717,6 +718,6 @@ class Actor:
 
 
 
-env = Environment('thiny_set.txt')
-A = Actor(env,batch_size=100, epsilon=0.1, learning_rate=1e-3, actor_repetition=10, critic_repetition=2,random_batch=True)
-A.train(epochs=10000, print_freq=500,prune=False)
+env = Environment('wordle-nyt-allowed-guesses-update-12546.txt')
+A = Actor(env,batch_size=1024, epsilon=0.1, learning_rate=1e-3, actor_repetition=10, critic_repetition=2,random_batch=True,sample_size=256)
+A.train(epochs=50000, print_freq=1000,prune=False)
