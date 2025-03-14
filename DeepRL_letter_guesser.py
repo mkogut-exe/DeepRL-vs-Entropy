@@ -720,4 +720,4 @@ class Actor:
 
 env = Environment('wordle-nyt-allowed-guesses-update-12546.txt')
 A = Actor(env,batch_size=1024, epsilon=0.1, learning_rate=1e-3, actor_repetition=10, critic_repetition=2,random_batch=True,sample_size=256)
-A.train(epochs=50000, print_freq=1000,prune=False)
+A.train(epochs=30000, print_freq=1000,prune=False)
