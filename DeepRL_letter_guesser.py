@@ -708,7 +708,7 @@ class Actor:
 
 
 # Example usage
-env = Environment('reduced_set.txt')
-A = Actor(env,batch_size=1024, epsilon=0.1, learning_rate=1e-1, actor_repetition=100, critic_repetition=20,random_batch=True)
-A.train(epochs=40000, print_freq=1000,prune=False)
+env = Environment('thiny_set.txt')
+A = Actor(env,batch_size=100, epsilon=0.1, learning_rate=1e-3, actor_repetition=10, critic_repetition=2,random_batch=True)
+A.train(epochs=10000, print_freq=500,prune=False)
 ######act_word####
