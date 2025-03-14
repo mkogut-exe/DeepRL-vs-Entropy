@@ -61,33 +61,14 @@ class Actor:
             nn.SiLU(),
             nn.Linear(256, 256),
             nn.SiLU(),
-            nn.Linear(256, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
+            nn.Linear(256,self.allowed_words_length ),
             nn.LayerNorm(256),
-            nn.SiLU(),
-        nn.Linear(256,self.allowed_words_length ),
         nn.Softmax(dim=-1)
         ).to(device)
 
         # Critic network
         self.critic = nn.Sequential(
             nn.Linear(self.allowed_words_length, 256),
-            nn.SiLU(),
-            nn.SiLU(),
-            nn.Linear(256, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
             nn.SiLU(),
             nn.Linear(256, 256),
             nn.SiLU(),
@@ -331,7 +312,7 @@ class Actor:
         self.sparsity_threshold = sparsity_threshold
         self.prune = prune
         self.model_id = create_model_id(epochs=epochs, actor_repetition=self.actor_repetition,
-                                        critic_repetition=self.critic_repetition, actor_network_size='8x256',
+                                        critic_repetition=self.critic_repetition, actor_network_size='1x256',
                                         learning_rate=self.learning_rate, batch_size=self.batch_size)
         total_wins = 0
         batch_losses_actor = []
