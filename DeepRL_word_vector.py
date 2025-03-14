@@ -61,8 +61,8 @@ class Actor:
             nn.SiLU(),
             nn.Linear(256, 256),
             nn.SiLU(),
-            nn.Linear(256,self.allowed_words_length ),
             nn.LayerNorm(256),
+            nn.Linear(256,self.allowed_words_length ),
         nn.Softmax(dim=-1)
         ).to(device)
 
