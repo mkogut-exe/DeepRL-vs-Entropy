@@ -58,7 +58,14 @@ class Actor:
             nn.Linear(self.env.word_length * 26, 256),
             nn.SiLU(),
             nn.Linear(256, 256),
-
+            nn.SiLU(),
+            nn.Linear(256, 256),
+            nn.SiLU(),
+            nn.Linear(256, 256),
+            nn.SiLU(),
+            nn.Linear(256, 256),
+            nn.SiLU(),
+            nn.Linear(256, 256),
             nn.SiLU(),
             nn.Linear(256, 256),
             nn.SiLU(),
@@ -363,7 +370,7 @@ class Actor:
         self.prune_freq = prune_freq
         self.sparsity_threshold = sparsity_threshold
         self.prune=prune
-        self.model_id=create_model_id(epochs=epochs, actor_repetition=self.actor_repetition, critic_repetition=self.critic_repetition, actor_network_size='4x256',learning_rate=self.learning_rate,batch_size=self.batch_size)
+        self.model_id=create_model_id(epochs=epochs, actor_repetition=self.actor_repetition, critic_repetition=self.critic_repetition, actor_network_size='8x256',learning_rate=self.learning_rate,batch_size=self.batch_size)
         total_wins = 0
         batch_losses_actor = []
         batch_losses_critic = []
@@ -707,8 +714,7 @@ class Actor:
         return avg_tries, win_rate
 
 
-# Example usage
+
 env = Environment('thiny_set.txt')
 A = Actor(env,batch_size=100, epsilon=0.1, learning_rate=1e-3, actor_repetition=10, critic_repetition=2,random_batch=True)
 A.train(epochs=10000, print_freq=500,prune=False)
-######act_word####
