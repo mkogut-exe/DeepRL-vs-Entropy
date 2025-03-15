@@ -27,7 +27,7 @@ random.seed(seed)
 
 
 def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size,learning_rate,batch_size):
-    return f"_Rv2_2_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
+    return f"_Rv2_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
 
 
 class Actor:
@@ -713,6 +713,6 @@ class Actor:
 
 
 
-env = Environment("thiny_set.txt")
-A = Actor(env,batch_size=100, epsilon=0.1, learning_rate=1e-3, actor_repetition=10, critic_repetition=2,random_batch=True,sample_size=25)
-A.train(epochs=20000, print_freq=100,prune=False)
+env = Environment("reduced_set.txt")
+A = Actor(env,batch_size=1024, epsilon=0.1, learning_rate=1e-3, actor_repetition=10, critic_repetition=2,random_batch=True,sample_size=256)
+A.train(epochs=40000, print_freq=1000,prune=False)
