@@ -27,7 +27,7 @@ random.seed(seed)
 
 
 def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size,learning_rate,batch_size):
-    return f"_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
+    return f"_Rv2_2_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
 
 
 class Actor:
@@ -541,16 +541,11 @@ class Actor:
                 # Calculate reward (same as in original train method)
                 correct_position = local_env.correct_position
                 in_word = local_env.in_word
+                reward=0.5
                 position_improvement = correct_position - last_correct
                 word_improvement = in_word - last_in_word
-
-                if local_env.win:
-                    time_bonus = 0.4 ** (local_env.try_count - 1)
-                    reward = 2.0 + time_bonus
-                else:
-                    stagnation_penalty = -0.5 if (position_improvement == 0 and word_improvement == 0) else 0
-                    step_penalty = -0.2 * (1 + (local_env.try_count / local_env.max_tries))
-                    reward = (position_improvement * 0.6 + word_improvement * 0.4 + step_penalty + stagnation_penalty)
+                stagnation_penalty = -0.5 if (position_improvement == 0 and word_improvement == 0) else 0
+                reward+=stagnation_penalty+position_improvement+word_improvement
 
                 last_correct = correct_position
                 last_in_word = in_word
@@ -718,6 +713,6 @@ class Actor:
 
 
 
-env = Environment('wordle-nyt-allowed-guesses-update-12546.txt')
-A = Actor(env,batch_size=1024, epsilon=0.1, learning_rate=1e-3, actor_repetition=10, critic_repetition=2,random_batch=True,sample_size=256)
-A.train(epochs=30000, print_freq=1000,prune=False)
+env = Environment("thiny_set.txt")
+A = Actor(env,batch_size=100, epsilon=0.1, learning_rate=1e-3, actor_repetition=10, critic_repetition=2,random_batch=True,sample_size=25)
+A.train(epochs=20000, print_freq=100,prune=False)
