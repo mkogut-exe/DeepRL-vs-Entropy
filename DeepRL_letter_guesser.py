@@ -28,7 +28,13 @@ random.seed(seed)
 
 def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size,learning_rate,batch_size):
     return f"_Rv2_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
-
+    # - Rv2 - Version of the model with no win reward
+    # - epo: Number of epochs
+    # - AR: Actor repetition count
+    # - CR: Critic repetition count
+    # - AS: Actor network size
+    # - Lr: Learning rate
+    # - Bs: Batch size
 
 class Actor:
     def __init__(self, env: Environment, batch_size=256, discount=0.99, epsilon=0.1, learning_rate=1e-4,
@@ -661,7 +667,7 @@ class Actor:
         print("Parallel training finished.")
 
     def continue_training(self, model_path, stats_path=None, epochs=5000, print_freq=500,
-                          learning_rate=None, epsilon=None, actor_repetition=None, critic_repetition=None):
+                          learning_rate=None, epsilon=None, actor_repetition=None, critic_repetition=None,batch_size=None,random_batch=None,sample_size=None):
         # Load model and stats (unchanged)
         self.load_model(model_path)
         print(f"Loaded model from {model_path}")
@@ -688,6 +694,15 @@ class Actor:
         if critic_repetition is not None:
             self.critic_repetition = critic_repetition
             print(f"Updated critic repetition to {critic_repetition}")
+        if batch_size is not None:
+            self.batch_size = batch_size
+            print(f"Updated batch size to {batch_size}")
+        if random_batch is not None:
+            self.random_batch = random_batch
+            print(f"Updated random batch to {random_batch}")
+        if sample_size is not None:
+            self.sample_size = sample_size
+            print(f"Updated sample size to {sample_size}")
 
         # Continue training - now with append_metrics=True to append to existing file
         print(f"Continuing training for {epochs} epochs...")
@@ -714,5 +729,6 @@ class Actor:
 
 
 env = Environment("reduced_set.txt")
-A = Actor(env,batch_size=1024, epsilon=0.1, learning_rate=1e-3, actor_repetition=10, critic_repetition=2,random_batch=True,sample_size=256)
-A.train(epochs=40000, print_freq=1000,prune=False)
+A = Actor(env,batch_size=1024, epsilon=0.1, learning_rate=1e-5, actor_repetition=10, critic_repetition=2,random_batch=True,sample_size=256)
+A.continue_training(model_path='training_metrics_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='training_metrics_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=40000, print_freq=500, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2,batch_size=1024,random_batch=True,sample_size=256)
+#A.train(epochs=40000, print_freq=1000,prune=False)
