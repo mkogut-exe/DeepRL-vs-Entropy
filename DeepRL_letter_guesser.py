@@ -544,7 +544,7 @@ class Actor:
                 next_state = local_actor.state()
                 done = local_env.end
 
-                # Calculate reward (same as in original train method)
+                # Calculate reward
                 correct_position = local_env.correct_position
                 in_word = local_env.in_word
                 reward=0.5
@@ -729,6 +729,6 @@ class Actor:
 
 
 env = Environment("reduced_set.txt")
-A = Actor(env,batch_size=1024, epsilon=0.1, learning_rate=1e-5, actor_repetition=10, critic_repetition=2,random_batch=True,sample_size=256)
-A.continue_training(model_path='training_metrics_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='training_metrics_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=40000, print_freq=500, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2,batch_size=1024,random_batch=True,sample_size=256)
+A = Actor(env,batch_size=1024, epsilon=0.1, learning_rate=1e-4, actor_repetition=10, critic_repetition=2,random_batch=True,sample_size=256)
+A.continue_training(model_path='actor_critic_end_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='actor_critic_stats_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=40000, print_freq=500, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2,batch_size=1024,random_batch=True,sample_size=256)
 #A.train(epochs=40000, print_freq=1000,prune=False)
