@@ -407,29 +407,18 @@ class Actor:
                 # Calculate reward
                 correct_position = self.env.correct_position
                 in_word = self.env.in_word
-                position_improvement = correct_position - last_correct
-                word_improvement = in_word - last_in_word
 
-                if self.env.win:
-                    # Keep exponential bonus for faster wins
-                    time_bonus = 0.4 ** (self.env.try_count - 1)
-                    reward = 2.0 + time_bonus  # Base win reward + scaled bonus
+                # Ensure improvements can't be negative (should be rare but possible)
+                position_improvement = max(0, correct_position - last_correct)
+                word_improvement = max(0, in_word - last_in_word)
+
+                # Use different reward based on progress
+                if position_improvement > 0 or word_improvement > 0:
+                    # Good progress - higher reward
+                    reward = 1.0 + position_improvement + word_improvement
                 else:
-
-                    # Make improvements non-negative and cap them
-                    position_improvement = max(0, position_improvement)
-                    word_improvement = max(0, word_improvement)
-
-                    # Apply diminishing returns to limit small improvement rewards
-                    position_reward = min(0.5, position_improvement * 0.3)
-                    word_reward = min(0.3, word_improvement * 0.2)
-
-                    # Progress bonus (small but positive)
-                    progress_bonus = 0.05 if (position_improvement > 0 or word_improvement > 0) else 0
-
-                    # Final positive reward
-                    reward = position_reward + word_reward + progress_bonus
-                
+                    # No progress 
+                    reward = 0
 
                 last_correct = correct_position
                 last_in_word = in_word
@@ -494,7 +483,7 @@ class Actor:
                 self.save_stats(f'actor_critic_stats{self.model_id}.pkl')
 
         # Process any remaining samples in the buffer at the end
-        while len(replay_buffer) >= 32:  # Process remaining data in small batches
+        while len(replay_buffer) >= 1:  # Process remaining data in small batches
             mini_batch_size = min(1024, len(replay_buffer))
             batch = replay_buffer[:mini_batch_size]
             replay_buffer = replay_buffer[mini_batch_size:]
@@ -506,8 +495,8 @@ class Actor:
         self.save_stats(f'actor_critic_stats{self.model_id}.pkl')
         print("Training finished.")
 
-    def parallel_train(self, epochs=500, print_freq=50, batch_size=20, autosave=False):
-        """Train the Actor-Critic model using parallel environment simulations to collect experiences."""
+    """def parallel_train(self, epochs=500, print_freq=50, batch_size=20, autosave=False):
+        
         print("Training with parallel experience collection...")
         total_wins = 0
         batch_losses_actor = []
@@ -665,7 +654,7 @@ class Actor:
         self.save_model(f'actor_critic_end{self.model_id}.pt')
         self.save_stats(f'actor_critic_stats{self.model_id}.pkl')
         print("Parallel training finished.")
-
+"""
     def continue_training(self, model_path, stats_path=None, epochs=5000, print_freq=500,
                           learning_rate=None, epsilon=None, actor_repetition=None, critic_repetition=None,batch_size=None,random_batch=None,sample_size=None):
         # Load model and stats (unchanged)
@@ -730,5 +719,5 @@ class Actor:
 
 env = Environment("reduced_set.txt")
 A = Actor(env,batch_size=1024, epsilon=0.1, learning_rate=1e-4, actor_repetition=10, critic_repetition=2,random_batch=True,sample_size=256)
-A.continue_training(model_path='GOOD2_actor_critic_end_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='GOOD2_actor_critic_stats_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=40000, print_freq=500, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2,batch_size=1024,random_batch=True,sample_size=256)
-#A.train(epochs=40000, print_freq=1000,prune=False)
+#A.continue_training(model_path='GOOD2_actor_critic_end_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='GOOD2_actor_critic_stats_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=40000, print_freq=1000, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2,batch_size=1024,random_batch=True,sample_size=256)
+A.train(epochs=40000, print_freq=1000,prune=False)
