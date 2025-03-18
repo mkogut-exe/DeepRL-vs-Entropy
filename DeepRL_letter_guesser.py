@@ -27,8 +27,8 @@ random.seed(seed)
 
 
 def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size,learning_rate,batch_size):
-    return f"_Rv2_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
-    # - Rv2 - Version of the model with no win reward
+    return f"_Rv3_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
+    # - Rv - Version of the model with no win reward
     # - epo: Number of epochs
     # - AR: Actor repetition count
     # - CR: Critic repetition count
@@ -70,14 +70,6 @@ class Actor:
             nn.Linear(256, 256),
             nn.SiLU(),
             nn.Linear(256, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
             nn.LayerNorm(256),
             nn.SiLU(),
             nn.Linear(256, self.env.word_length * 26)
@@ -86,10 +78,6 @@ class Actor:
         # Critic network
         self.critic = nn.Sequential(
             nn.Linear(self.env.word_length * 26, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
-            nn.SiLU(),
-            nn.Linear(256, 256),
             nn.SiLU(),
             nn.Linear(256, 256),
             nn.SiLU(),
@@ -378,7 +366,7 @@ class Actor:
         self.prune_freq = prune_freq
         self.sparsity_threshold = sparsity_threshold
         self.prune=prune
-        self.model_id=create_model_id(epochs=epochs, actor_repetition=self.actor_repetition, critic_repetition=self.critic_repetition, actor_network_size='8x256',learning_rate=self.learning_rate,batch_size=self.batch_size)
+        self.model_id=create_model_id(epochs=epochs, actor_repetition=self.actor_repetition, critic_repetition=self.critic_repetition, actor_network_size='4x256',learning_rate=self.learning_rate,batch_size=self.batch_size)
         total_wins = 0
         batch_losses_actor = []
         batch_losses_critic = []
@@ -718,6 +706,6 @@ class Actor:
 
 
 env = Environment("reduced_set.txt")
-A = Actor(env,batch_size=1024, epsilon=0.1, learning_rate=1e-4, actor_repetition=10, critic_repetition=2,random_batch=True,sample_size=256)
+A = Actor(env,batch_size=1024, epsilon=0.1, learning_rate=1e-5, actor_repetition=10, critic_repetition=2,random_batch=True,sample_size=256)
 #A.continue_training(model_path='GOOD2_actor_critic_end_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='GOOD2_actor_critic_stats_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=40000, print_freq=1000, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2,batch_size=1024,random_batch=True,sample_size=256)
-A.train(epochs=40000, print_freq=1000,prune=False)
+A.train(epochs=80000, print_freq=1000,prune=False)
