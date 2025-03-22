@@ -396,21 +396,23 @@ class Actor:
                 # Calculate reward
                 correct_position = self.env.correct_position
                 in_word = self.env.in_word
-
-                # Ensure improvements can't be negative (should be rare but possible)
-                position_improvement = max(0, correct_position - last_correct)
-                word_improvement = max(0, in_word - last_in_word)
-
-                # Use different reward based on progress
-                if position_improvement > 0 or word_improvement > 0:
-                    # Good progress - higher reward
-                    reward = 1.0 + position_improvement + word_improvement
+                position_improvement = correct_position - last_correct
+                word_improvement = in_word - last_in_word
+                if self.env.win:
+                    # Keep exponential bonus for faster wins
+                    time_bonus = 0.4 ** (self.env.try_count - 1)
+                    reward = 2.0 + time_bonus  # Base win reward + scaled bonus
                 else:
-                    # No progress 
-                    reward = 0
-
-                last_correct = correct_position
-                last_in_word = in_word
+                    # Make improvements non-negative and cap them
+                    position_improvement = max(0, position_improvement)
+                    word_improvement = max(0, word_improvement)
+                    # Apply diminishing returns to limit small improvement rewards
+                    position_reward = min(0.5, position_improvement * 0.3)
+                    word_reward = min(0.3, word_improvement * 0.2)
+                    # Progress bonus (small but positive)
+                    progress_bonus = 0.05 if (position_improvement > 0 or word_improvement > 0) else 0
+                    # Final positive reward
+                    reward = position_reward + word_reward + progress_bonus
 
                 # Add transition to replay buffer
                 replay_buffer.append((state, action, reward, next_state, old_prob, done))

@@ -91,9 +91,41 @@ class Entropy_maximizer:#class that maximizes the entropy of the guesses and uss
                     print(f'{i + 1}. {word}: {entropy}')
         return self.env.win, self.env.try_count#return the result of the game and the number of tries
 
+    def calculate_entropy(self, words=None):
+        Entropy_list = []
+        if words is None:
+            words = self.env.allowed_words.tolist()
+
+        max_entropy = -np.inf
+        best_guess = None
+        word_total = len(words)
+
+        for i in tqdm(range(len(words)), disable=self.silent):
+            candidate = words[i]
+            pattern_counts = defaultdict(int)
+
+            for word in words:
+                match = check_letters_maches(candidate, word)
+
+                # Convert to string representation for hash key
+                feedback_str = str(match)
+                pattern_counts[feedback_str] += 1
+
+            entropy = 0.0
+            for count in pattern_counts.values():
+                p = count / word_total
+                if p > 0:
+                    entropy += p * np.log2(1 / p)
+            Entropy_list.append((entropy, candidate))
+
+            if entropy > max_entropy:
+                max_entropy = entropy
+                best_guess = candidate
+
+        return best_guess, max_entropy, Entropy_list
 
 
-    def calculate_entropy(self, words=None):#function that calculates the entropy of the guesses
+    """def calculate_entropy(self, words=None):#function that calculates the entropy of the guesses
         Entropy_list = []
         if words is None:#if no list of words is provided, the list of allowed words is used
             words= self.env.allowed_words.tolist()
@@ -123,7 +155,7 @@ class Entropy_maximizer:#class that maximizes the entropy of the guesses and uss
                 max_entropy = entropy
                 best_guess = candidate
 
-        return best_guess, max_entropy, Entropy_list #return the best guess, the maximum entropy and the list of entropies
+        return best_guess, max_entropy, Entropy_list""" #return the best guess, the maximum entropy and the list of entropies
     def save_starting_entropy_list(self):#function that saves the entropy list for the first guess to a file (stay the same for every first guess for a given word list)
         best_guess, max_entropy, Entropy_list = self.calculate_entropy()
         sorted_Entropy_list = sorted(Entropy_list, key=lambda x: x[0],reverse=True)
@@ -167,7 +199,7 @@ class Entropy_maximizer:#class that maximizes the entropy of the guesses and uss
 
         # Process words in smaller batches
         batch_size = 20
-        n_processes = min(cpu_count(), 14)  # Limit number of processes
+        n_processes = min(cpu_count(), 4)  # Limit number of processes
 
         # Create word batches
         word_batches = []
@@ -235,5 +267,3 @@ def process_word_parallel(args):
     return word, win, tries
 
 em=Entropy_maximizer(Environment('wordle-nyt-allowed-guesses-update-12546.txt'), silent=False)
-
-print(em.env.allowed_words)

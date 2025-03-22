@@ -3,7 +3,7 @@ import pandas as pd
 import os
 
 
-def plot_training_metrics(file_path='training_metrics_epo-40000_AR-20_CR-5_AS-4x256-Lr0.001-Bs1024.csv'):
+def plot_training_metrics(file_path='training_metrics.csv'):
     # Check if file exists
     if not os.path.exists(file_path):
         print(f"Error: {file_path} not found.")
@@ -30,8 +30,8 @@ def plot_training_metrics(file_path='training_metrics_epo-40000_AR-20_CR-5_AS-4x
     ax1.grid(True)
 
     # Set y-axis limits for actor loss (ignore outliers)
-    q95_actor = df['Actor_Loss'].quantile(0.95)
-    ax1.set_ylim(-0.2, q95_actor * 2)
+    q80_actor = df['Actor_Loss'].quantile(0.80)
+    ax1.set_ylim(-0.7, 0.5)#q80_actor * 4)
 
     # Plot critic loss
     ax2.plot(df['Episode'], df['Critic_Loss'], 'r-', alpha=0.3)
@@ -41,8 +41,8 @@ def plot_training_metrics(file_path='training_metrics_epo-40000_AR-20_CR-5_AS-4x
     ax2.grid(True)
 
     # Set y-axis limits for critic loss (ignore outliers)
-    q95_critic = df['Critic_Loss'].quantile(0.95)
-    ax2.set_ylim(0, q95_critic * 1.2)
+    q80_critic = df['Critic_Loss'].quantile(0.80)
+    ax2.set_ylim(0, q80_critic * 2)
 
     # Plot win rate
     ax3.plot(df['Episode'], df['Win_Rate'], 'g-', alpha=0.3)
@@ -52,18 +52,20 @@ def plot_training_metrics(file_path='training_metrics_epo-40000_AR-20_CR-5_AS-4x
     ax3.grid(True)
 
     # Add baseline for random guessing
-    ax3.axhline(y=0.8116, color='gray', linestyle='--', alpha=0.7, label='Random Baseline')
+    ax3.axhline(y=0.81, color='gray', linestyle='--', alpha=0.7, label='Random Baseline')
     ax3.legend()
 
     # Set y-axis limits for win rate
     win_max = max(0.3, df['Win_Rate'].max() * 1.05)
-    ax3.set_ylim(0.72, win_max)
+    ax3.set_ylim(0.7, win_max)
 
+    # Save plot with same name as input file but PNG extension
+    output_path = f'{os.path.splitext(file_path)[0]}.png'
     plt.tight_layout()
-    plt.savefig(f'{os.path.splitext(file_path)[0]}.png')
-    print(f"Plot saved as '{os.path.splitext(file_path)[0]}.png'")
+    plt.savefig(output_path)
+    print(f"Plot saved as '{output_path}' (based on input file '{file_path}')")
     plt.show()
 
 
 if __name__ == "__main__":
-    plot_training_metrics()
+    plot_training_metrics(file_path='training_metrics_Rv3_epo-80000_AR-10_CR-2_AS-4x256-Lr-1e-05-Bs-1024.csv')

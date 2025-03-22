@@ -2,7 +2,7 @@ import pickle
 import numpy as np
 
 
-def summarize_wordle_stats(file_path='wordle_stats_first_run.pkl'):
+def summarize_wordle_stats(file_path='wordle_stats_600.pkl'):
     with open(file_path, 'rb') as f:
         stats = pickle.load(f)
 

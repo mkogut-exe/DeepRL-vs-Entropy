@@ -51,5 +51,5 @@ class Matching_roulette:#class that plays the game bu just choosing the word for
         print(f"Average tries: {tries_avg}")
         print(f"Win rate: {wins_avg}")
         return tries_avg, wins_avg
-MR=Matching_roulette("reduced_set.txt")
+MR=Matching_roulette("thiny_set.txt")
 MR.get_average(5000)

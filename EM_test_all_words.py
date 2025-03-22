@@ -9,7 +9,7 @@ if __name__ == '__main__':
 
     # Use absolute path for the input file
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    input_file = os.path.join(current_dir, 'wordle-nyt-allowed-guesses-update-12546.txt')
+    input_file = os.path.join(current_dir, 'thiny_set.txt')
 
     em = Entropy_maximizer(Environment(input_file), silent=True)
-    em.get_stats('wordle_stats')
+    em.get_stats('wordle_stats_600')

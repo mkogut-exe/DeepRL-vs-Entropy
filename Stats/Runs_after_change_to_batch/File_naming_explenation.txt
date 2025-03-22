@@ -1,0 +1,7 @@
+    # - Rv2 - Version of the model with no win reward
+    # - epo: Number of epochs
+    # - AR: Actor repetition count
+    # - CR: Critic repetition count
+    # - AS: Actor network size
+    # - Lr: Learning rate
+    # - Bs: Batch size
