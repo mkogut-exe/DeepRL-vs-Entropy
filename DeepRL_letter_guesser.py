@@ -27,7 +27,7 @@ random.seed(seed)
 
 def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size, learning_rate, batch_size):
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    return f"_{timestamp}_LGv5_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
+    return f"_{timestamp}_LGv5_-win_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
     # - Rv - Version of the model with no win reward
     # - epo: Number of epochs
     # - AR: Actor repetition count
