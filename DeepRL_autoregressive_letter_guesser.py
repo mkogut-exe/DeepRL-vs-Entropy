@@ -428,13 +428,14 @@ class Actor:
                 position_improvement = max(0, correct_position - last_correct)
                 word_improvement = max(0, in_word - last_in_word)
 
+                reward = 0
+                if self.env.win:
+                    reward = 10.0
                 # Use different reward based on progress
                 if position_improvement > 0 or word_improvement > 0:
                     # Good progress - higher reward
-                    reward = 1.0 + position_improvement + word_improvement
-                else:
-                    # No progress
-                    reward = 0
+                    reward += 1.0 + position_improvement + word_improvement
+
 
                 episode_total_reward += reward  # Add to episode total
 

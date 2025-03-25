@@ -11,6 +11,7 @@ import csv
 from multiprocessing import Pool, cpu_count
 import torch.nn.utils.prune as prune
 import datetime
+import warnings
 
 # Check torch version and CUDA availability
 torch_version = torch.__version__
@@ -23,6 +24,14 @@ seed = 1
 torch.manual_seed(seed)
 np.random.seed(seed)
 random.seed(seed)
+
+
+def check_dimensions(tensor, expected_shape, name="tensor"):
+    """Utility function to check if tensor dimensions match expected shape"""
+    if tensor.shape != expected_shape:
+        warnings.warn(f"Dimension mismatch for {name}: Expected {expected_shape}, got {tensor.shape}")
+        return False
+    return True
 
 
 def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size, learning_rate, batch_size):
@@ -133,17 +142,52 @@ class Actor:
 
     def state(self):
         state = self.env.get_letter_possibilities_from_matches(self.env.find_matches())
-        return torch.FloatTensor(state.flatten()).to(device)  # Flatten the 5x26 array
+        expected_shape = (self.env.word_length, 26)
+        check_dimensions(state, expected_shape, "raw state")
+        print(f"Raw state shape: {state.shape}")
+        
+        flattened_state = torch.FloatTensor(state.flatten()).to(device)
+        expected_flattened_shape = (self.env.word_length * 26,)
+        check_dimensions(flattened_state, expected_flattened_shape, "flattened state")
+        print(f"Flattened state shape: {flattened_state.shape}")
+        
+        return flattened_state  # Flatten the 5x26 array
 
     def act_word(self):
         with torch.no_grad():
             state = self.state()
-            logits = self.actor(state).view(self.env.word_length, 26)
+            print(f"State shape: {state.shape}")
+            expected_state_shape = (self.env.word_length * 26,)
+            if not check_dimensions(state, expected_state_shape, "state input to actor"):
+                warnings.warn(f"State shape mismatch: Expected {expected_state_shape}, got {state.shape}")
+
+            logits = self.actor(state)
+            print(f"Raw logits shape: {logits.shape}")
+            expected_logits_shape = (self.env.word_length * 26,)
+            if not check_dimensions(logits, expected_logits_shape, "raw logits from actor"):
+                warnings.warn(f"Raw logits shape mismatch: Expected {expected_logits_shape}, got {logits.shape}")
+
+            logits = logits.view(self.env.word_length, 26)
+            print(f"Reshaped logits shape: {logits.shape}")
+            expected_reshaped_shape = (self.env.word_length, 26)
+            if not check_dimensions(logits, expected_reshaped_shape, "reshaped logits"):
+                warnings.warn(f"Reshaped logits shape mismatch: Expected {expected_reshaped_shape}, got {logits.shape}")
+
             state_reshaped = state.view(self.env.word_length, 26)
+            print(f"Reshaped state shape: {state_reshaped.shape}")
+            if not check_dimensions(state_reshaped, expected_reshaped_shape, "reshaped state"):
+                warnings.warn(f"Reshaped state shape mismatch: Expected {expected_reshaped_shape}, got {state_reshaped.shape}")
 
             # Apply mask for numerical stability
             masked_logits = logits + (state_reshaped - 1) * 1e8
+            print(f"Masked logits shape: {masked_logits.shape}")
+            if not check_dimensions(masked_logits, expected_reshaped_shape, "masked logits"):
+                warnings.warn(f"Masked logits shape mismatch: Expected {expected_reshaped_shape}, got {masked_logits.shape}")
+
             action_prob = torch.softmax(masked_logits, dim=1)
+            print(f"Action probability shape: {action_prob.shape}")
+            if not check_dimensions(action_prob, expected_reshaped_shape, "action probability"):
+                warnings.warn(f"Action probability shape mismatch: Expected {expected_reshaped_shape}, got {action_prob.shape}")
 
             # Epsilon-greedy exploration with only matching words
             matching_words = self.env.find_matches()
@@ -186,18 +230,58 @@ class Actor:
         random = self.random_batch
 
         states = torch.stack(states)
+        print(f"Batch states shape: {states.shape}")
+        expected_states_shape = (len(states), self.env.word_length * 26)
+        if not check_dimensions(states, expected_states_shape, "batch states"):
+            warnings.warn(f"Batch states shape mismatch: Expected {expected_states_shape}, got {states.shape}")
+
         actions = torch.tensor(actions, device=device, dtype=torch.long)
+        print(f"Batch actions shape: {actions.shape}")
+        expected_actions_shape = (len(states),)
+        if not check_dimensions(actions, expected_actions_shape, "batch actions"):
+            warnings.warn(f"Batch actions shape mismatch: Expected {expected_actions_shape}, got {actions.shape}")
+
         rewards = torch.tensor(rewards, device=device, dtype=torch.float32)
+        print(f"Batch rewards shape: {rewards.shape}")
+        if not check_dimensions(rewards, expected_actions_shape, "batch rewards"):
+            warnings.warn(f"Batch rewards shape mismatch: Expected {expected_actions_shape}, got {rewards.shape}")
+
         next_states = torch.stack(next_states)
+        print(f"Batch next_states shape: {next_states.shape}")
+        if not check_dimensions(next_states, expected_states_shape, "batch next_states"):
+            warnings.warn(f"Batch next_states shape mismatch: Expected {expected_states_shape}, got {next_states.shape}")
+
         old_action_probs_selected = torch.tensor(old_action_probs_selected, device=device, dtype=torch.float32)
+        print(f"Batch old_probs shape: {old_action_probs_selected.shape}")
+        if not check_dimensions(old_action_probs_selected, expected_actions_shape, "batch old_action_probs"):
+            warnings.warn(f"Batch old_action_probs shape mismatch: Expected {expected_actions_shape}, got {old_action_probs_selected.shape}")
+
         dones = torch.tensor(dones, device=device, dtype=torch.float32)
+        print(f"Batch dones shape: {dones.shape}")
+        if not check_dimensions(dones, expected_actions_shape, "batch dones"):
+            warnings.warn(f"Batch dones shape mismatch: Expected {expected_actions_shape}, got {dones.shape}")
 
         # Critic update - always use full batch
         with torch.no_grad():
             current_values = self.critic(states).squeeze(-1)
+            print(f"Current values shape: {current_values.shape}")
+            if not check_dimensions(current_values, expected_actions_shape, "current values"):
+                warnings.warn(f"Current values shape mismatch: Expected {expected_actions_shape}, got {current_values.shape}")
+
             next_values = self.critic(next_states).squeeze(-1)
+            print(f"Next values shape: {next_values.shape}")
+            if not check_dimensions(next_values, expected_actions_shape, "next values"):
+                warnings.warn(f"Next values shape mismatch: Expected {expected_actions_shape}, got {next_values.shape}")
+
             target_values = rewards + self.discount * next_values * (1 - dones)
+            print(f"Target values shape: {target_values.shape}")
+            if not check_dimensions(target_values, expected_actions_shape, "target values"):
+                warnings.warn(f"Target values shape mismatch: Expected {expected_actions_shape}, got {target_values.shape}")
+
             td_errors = target_values - current_values
+            print(f"TD errors shape: {td_errors.shape}")
+            if not check_dimensions(td_errors, expected_actions_shape, "TD errors"):
+                warnings.warn(f"TD errors shape mismatch: Expected {expected_actions_shape}, got {td_errors.shape}")
 
         # Update critic
         critic_losses = []
@@ -259,14 +343,41 @@ class Actor:
 
             # Get new action probabilities
             prob = self.actor(batch_states)
+            print(f"Actor output shape: {prob.shape}")
+            expected_prob_shape = (len(batch_states), self.env.word_length * 26)
+            if not check_dimensions(prob, expected_prob_shape, "actor output"):
+                warnings.warn(f"Actor output shape mismatch: Expected {expected_prob_shape}, got {prob.shape}")
+
             prob = prob.view(-1, self.env.word_length, 26)
+            print(f"Reshaped prob shape: {prob.shape}")
+            expected_reshaped_prob = (len(batch_states), self.env.word_length, 26)
+            if not check_dimensions(prob, expected_reshaped_prob, "reshaped prob"):
+                warnings.warn(f"Reshaped prob shape mismatch: Expected {expected_reshaped_prob}, got {prob.shape}")
 
             states_reshaped = batch_states.view(-1, self.env.word_length, 26)
+            print(f"Reshaped batch_states shape: {states_reshaped.shape}")
+            if not check_dimensions(states_reshaped, expected_reshaped_prob, "reshaped batch states"):
+                warnings.warn(f"Reshaped batch states shape mismatch: Expected {expected_reshaped_prob}, got {states_reshaped.shape}")
+
             masked_prob = prob + (states_reshaped - 1) * 1e10
+            print(f"Masked prob shape: {masked_prob.shape}")
+            if not check_dimensions(masked_prob, expected_reshaped_prob, "masked prob"):
+                warnings.warn(f"Masked prob shape mismatch: Expected {expected_reshaped_prob}, got {masked_prob.shape}")
+
             new_action_probs = torch.softmax(masked_prob, dim=2)
+            print(f"New action probs shape: {new_action_probs.shape}")
+            if not check_dimensions(new_action_probs, expected_reshaped_prob, "new action probs"):
+                warnings.warn(f"New action probs shape mismatch: Expected {expected_reshaped_prob}, got {new_action_probs.shape}")
 
             masked_probs = new_action_probs * states_reshaped
+            print(f"Masked probs shape: {masked_probs.shape}")
+            if not check_dimensions(masked_probs, expected_reshaped_prob, "masked probs"):
+                warnings.warn(f"Masked probs shape mismatch: Expected {expected_reshaped_prob}, got {masked_probs.shape}")
+
             normalized_probs = masked_probs / (masked_probs.sum(dim=2, keepdim=True) + 1e-10)
+            print(f"Normalized probs shape: {normalized_probs.shape}")
+            if not check_dimensions(normalized_probs, expected_reshaped_prob, "normalized probs"):
+                warnings.warn(f"Normalized probs shape mismatch: Expected {expected_reshaped_prob}, got {normalized_probs.shape}")
 
             mini_batch_size = batch_actions.size(0)
             all_letter_indices = torch.zeros((mini_batch_size, self.env.word_length), dtype=torch.long, device=device)
@@ -277,12 +388,32 @@ class Actor:
 
             batch_pos_indices = torch.arange(self.env.word_length, device=device).unsqueeze(0).expand(mini_batch_size,
                                                                                                       -1)
+            print(f"Batch position indices shape: {batch_pos_indices.shape}")
+            expected_indices_shape = (mini_batch_size, self.env.word_length)
+            if not check_dimensions(batch_pos_indices, expected_indices_shape, "batch position indices"):
+                warnings.warn(f"Batch position indices shape mismatch: Expected {expected_indices_shape}, got {batch_pos_indices.shape}")
+
             batch_indices = torch.arange(mini_batch_size, device=device).unsqueeze(1).expand(-1, self.env.word_length)
+            print(f"Batch indices shape: {batch_indices.shape}")
+            if not check_dimensions(batch_indices, expected_indices_shape, "batch indices"):
+                warnings.warn(f"Batch indices shape mismatch: Expected {expected_indices_shape}, got {batch_indices.shape}")
 
             selected_probs = normalized_probs[batch_indices, batch_pos_indices, all_letter_indices]
+            print(f"Selected probs shape: {selected_probs.shape}")
+            if not check_dimensions(selected_probs, expected_indices_shape, "selected probs"):
+                warnings.warn(f"Selected probs shape mismatch: Expected {expected_indices_shape}, got {selected_probs.shape}")
+
             new_action_probs_selected = selected_probs.prod(dim=1)
+            print(f"New action probs selected shape: {new_action_probs_selected.shape}")
+            expected_selected_shape = (mini_batch_size,)
+            if not check_dimensions(new_action_probs_selected, expected_selected_shape, "new action probs selected"):
+                warnings.warn(f"New action probs selected shape mismatch: Expected {expected_selected_shape}, got {new_action_probs_selected.shape}")
 
             importance_ratios = new_action_probs_selected / (batch_old_probs + 1e-10)
+            print(f"Importance ratios shape: {importance_ratios.shape}")
+            if not check_dimensions(importance_ratios, expected_selected_shape, "importance ratios"):
+                warnings.warn(f"Importance ratios shape mismatch: Expected {expected_selected_shape}, got {importance_ratios.shape}")
+
             clipped_ratios = torch.clamp(importance_ratios, 1 - self.epsilon, 1 + self.epsilon)
             loss = torch.min(
                 importance_ratios * batch_td_errors,
@@ -341,6 +472,8 @@ class Actor:
                 position_improvement = max(0, correct_position - last_correct)
                 word_improvement = max(0, in_word - last_in_word)
                 reward = 0
+                if self.env.win:
+                    reward = 10.0
                 # Use different reward based on progress
                 if position_improvement > 0 or word_improvement > 0:
                     # Good progress - higher reward
@@ -495,3 +628,4 @@ A = Actor(env, batch_size=1024, epsilon=0.1, learning_rate=1e-5, actor_repetitio
           random_batch=True, sample_size=256)
 # A.continue_training(model_path='GOOD2_actor_critic_end_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='GOOD2_actor_critic_stats_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=40000, print_freq=1000, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2,batch_size=1024,random_batch=True,sample_size=256)
 A.train(epochs=40000, print_freq=1024, prune=False)
+
