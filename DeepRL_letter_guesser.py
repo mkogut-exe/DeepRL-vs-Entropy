@@ -27,7 +27,7 @@ random.seed(seed)
 
 def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size, learning_rate, batch_size):
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    return f"_{timestamp}_v4_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
+    return f"_{timestamp}_LGv5_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
     # - Rv - Version of the model with no win reward
     # - epo: Number of epochs
     # - AR: Actor repetition count
@@ -340,14 +340,13 @@ class Actor:
                 # Ensure improvements can't be negative (should be rare but possible)
                 position_improvement = max(0, correct_position - last_correct)
                 word_improvement = max(0, in_word - last_in_word)
-
+                reward = 0
+                if self.env.win:
+                    reward = 10.0
                 # Use different reward based on progress
                 if position_improvement > 0 or word_improvement > 0:
                     # Good progress - higher reward
-                    reward = 1.0 + position_improvement + word_improvement
-                else:
-                    # No progress
-                    reward = 0
+                    reward += 1.0 + position_improvement + word_improvement
 
                 episode_total_reward += reward  # Add to episode total
 
@@ -494,7 +493,7 @@ class Actor:
 
 
 env = Environment("reduced_set.txt")
-A = Actor(env, batch_size=10, epsilon=0.1, learning_rate=1e-5, actor_repetition=10, critic_repetition=2,
-          random_batch=True, sample_size=2)
+A = Actor(env, batch_size=1024, epsilon=0.1, learning_rate=1e-5, actor_repetition=10, critic_repetition=2,
+          random_batch=True, sample_size=256)
 # A.continue_training(model_path='GOOD2_actor_critic_end_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='GOOD2_actor_critic_stats_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=40000, print_freq=1000, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2,batch_size=1024,random_batch=True,sample_size=256)
-A.train(epochs=80, print_freq=10, prune=False)
+A.train(epochs=40000, print_freq=1024, prune=False)

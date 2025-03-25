@@ -27,7 +27,7 @@ random.seed(seed)
 
 def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size, learning_rate, batch_size):
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    return f"_{timestamp}_v4_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
+    return f"_{timestamp}_ARLGv1_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
     # - Rv - Version of the model with no win reward
     # - epo: Number of epochs
     # - AR: Actor repetition count
@@ -391,7 +391,7 @@ class Actor:
         self.sparsity_threshold = sparsity_threshold
         self.prune = prune
         self.model_id = create_model_id(epochs=epochs, actor_repetition=self.actor_repetition,
-                                        critic_repetition=self.critic_repetition, actor_network_size='4x256',
+                                        critic_repetition=self.critic_repetition, actor_network_size='2x256',
                                         learning_rate=self.learning_rate, batch_size=self.batch_size)
         total_wins = 0
         batch_losses_actor = []
