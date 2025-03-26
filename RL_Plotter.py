@@ -17,9 +17,10 @@ def plot_training_metrics(file_path='training_metrics.csv'):
     df['Actor_Loss_MA'] = df['Actor_Loss'].rolling(window=window, min_periods=1).mean()
     df['Critic_Loss_MA'] = df['Critic_Loss'].rolling(window=window, min_periods=1).mean()
     df['Win_Rate_MA'] = df['Win_Rate'].rolling(window=window, min_periods=1).mean()
+    df['Reward_MA'] = df['Reward'].rolling(window=window, min_periods=1).mean()
 
-    # Create figure with three subplots
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 12), sharex=True)
+    # Create figure with four subplots
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(12, 16), sharex=True)
 
     # Plot actor loss
     ax1.plot(df['Episode'], df['Actor_Loss'], 'b-', alpha=0.3)
@@ -31,7 +32,7 @@ def plot_training_metrics(file_path='training_metrics.csv'):
 
     # Set y-axis limits for actor loss (ignore outliers)
     q80_actor = df['Actor_Loss'].quantile(0.80)
-    ax1.set_ylim(-0.7, 0.5)#q80_actor * 4)
+    ax1.set_ylim(-0.5, q80_actor * 1.6)
 
     # Plot critic loss
     ax2.plot(df['Episode'], df['Critic_Loss'], 'r-', alpha=0.3)
@@ -42,12 +43,11 @@ def plot_training_metrics(file_path='training_metrics.csv'):
 
     # Set y-axis limits for critic loss (ignore outliers)
     q80_critic = df['Critic_Loss'].quantile(0.80)
-    ax2.set_ylim(0, q80_critic * 2)
+    ax2.set_ylim(0, q80_critic * 1.4)
 
     # Plot win rate
     ax3.plot(df['Episode'], df['Win_Rate'], 'g-', alpha=0.3)
     ax3.plot(df['Episode'], df['Win_Rate_MA'], 'g-', linewidth=2, label='Win Rate')
-    ax3.set_xlabel('Episode')
     ax3.set_ylabel('Win Rate')
     ax3.grid(True)
 
@@ -58,6 +58,19 @@ def plot_training_metrics(file_path='training_metrics.csv'):
     # Set y-axis limits for win rate
     win_max = max(0.3, df['Win_Rate'].max() * 1.05)
     ax3.set_ylim(0.7, win_max)
+    
+    # Plot rewards
+    ax4.plot(df['Episode'], df['Reward'], 'purple', alpha=0.3)
+    ax4.plot(df['Episode'], df['Reward_MA'], 'purple', linewidth=2, label='Reward')
+    ax4.set_xlabel('Episode')
+    ax4.set_ylabel('Reward')
+    ax4.grid(True)
+    ax4.legend()
+    
+    # Set y-axis limits for rewards
+    reward_min = df['Reward'].min() * 0.99
+    reward_max = df['Reward'].max() * 1.01
+    ax4.set_ylim(reward_min, reward_max)
 
     # Save plot with same name as input file but PNG extension
     output_path = f'{os.path.splitext(file_path)[0]}.png'
@@ -68,4 +81,4 @@ def plot_training_metrics(file_path='training_metrics.csv'):
 
 
 if __name__ == "__main__":
-    plot_training_metrics(file_path='training_metrics_Rv3_epo-80000_AR-10_CR-2_AS-4x256-Lr-1e-05-Bs-1024.csv')
+    plot_training_metrics(file_path='Stats/Reward_tracking_25_03/training_metrics_20250325120744_LGv5_-win_epo-40000_AR-10_CR-2_AS-4x256-Lr-1e-05-Bs-1024.csv')

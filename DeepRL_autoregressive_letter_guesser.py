@@ -27,7 +27,7 @@ random.seed(seed)
 
 def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size, learning_rate, batch_size):
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    return f"_{timestamp}_ARLGv1+win_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
+    return f"_{timestamp}_ARLGv1-win_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
     # - Rv - Version of the model with no win reward
     # - epo: Number of epochs
     # - AR: Actor repetition count
@@ -326,14 +326,6 @@ class Actor:
                     elif current_position_status[i] < last_position_status[i]:
                         pos_rewards_for_transition[i] = -0.5
 
-                    # Small reward for maintaining correct position
-                    elif current_position_status[i] == 2:
-                        pos_rewards_for_transition[i] = 0.5
-
-                # Add win reward distributed among positions
-                if self.env.win:
-                    for i in range(self.env.word_length):
-                        pos_rewards_for_transition[i] += 2.0  # Distribute win reward
 
                 # Update last status for next round
                 last_position_status = current_position_status
@@ -674,7 +666,7 @@ env = Environment("reduced_set.txt")
 A = Actor(env, batch_size=1024, epsilon=0.1, learning_rate=1e-3, actor_repetition=10, critic_repetition=2,
           random_batch=True, sample_size=256)
 # A.continue_training(model_path='GOOD2_actor_critic_end_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='GOOD2_actor_critic_stats_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=40000, print_freq=1000, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2,batch_size=1024,random_batch=True,sample_size=256)
-A.train(epochs=40000, print_freq=1000, prune=False)
+A.train(epochs=120000, print_freq=1000, prune=False)
 
 
 
