@@ -45,25 +45,34 @@ class Actor:
     """
     def __init__(self, env: Environment, batch_size=256, discount=0.99, epsilon=0.1, learning_rate=1e-4,
                  actor_repetition=15, critic_repetition=5, prune=False, prune_amount=0.1, prune_freq=1000,
-                 sparsity_threshold=0.1, random_batch=False, sample_size=256):
-        self.env = env
+                 sparsity_threshold=0.1, random_batch=False, sample_size=256,display_progress_bar=False):
+        #A-C parameters
+        self.env = env #Store environment
         self.discount = discount # Discount factor for TD learning
-        self.batch_size = batch_size # Batch size for training
         self.actor_repetition = actor_repetition # Number of times to update the actor network
         self.critic_repetition = critic_repetition # Number of times to update the critic network
         self.epsilon = epsilon # Epsilon for PPO clipping
-        self.model_id = ''
+        self.model_id = '' # Model ID for saving and loading
+
+
+        #PRUNE (not implemented yet)
         self.sparsity_threshold = sparsity_threshold #not implemented yet
         self.prune_amount = prune_amount #not implemented yet
         self.prune_freq = prune_freq #not implemented yet
         self.prune = prune #not implemented yet
+
+        #BATCH
+        self.batch_size = batch_size  # Batch size for training
         self.random_batch = random_batch # Whether to sample a random batch from the replay buffer
         self.sample_size = sample_size # Size of the random sample to take from the replay buffer
         self.learning_rate = learning_rate # Learning rate for the optimizer
 
+        #ENVIRONMENT
         self.allowed_words_length = len(self.env.allowed_words) # Number of allowed words
         self.word_to_idx = {word: idx for idx, word in enumerate(self.env.allowed_words)} # Mapping from word to index
         self.allowed_words_tensor = torch.tensor([self.word_to_idx[w] for w in self.env.allowed_words], device=device) # Tensor of allowed words indices
+
+        self.display_progress_bar = False  # Whether to display progress bar during training
 
         # Base input size is the game state
         base_input_size = self.env.word_length * 26
@@ -275,7 +284,7 @@ class Actor:
 
 
     def train(self, epochs=500, print_freq=50, autosave=False, append_metrics=False, prune_amount=0.1, prune_freq=1000,
-              sparsity_threshold=0.1, prune=False):
+              sparsity_threshold=0.1, prune=False, display_progress_bar=False):
 
         """
                 Train the Actor-Critic agents on Wordle games.
@@ -304,6 +313,7 @@ class Actor:
                     prune: Whether to enable weight pruning (not fully implemented)
                 """
         print("Training...")
+        self.display_progress_bar = display_progress_bar
         self.prune_amount = prune_amount
         self.prune_freq = prune_freq
         self.sparsity_threshold = sparsity_threshold
@@ -329,7 +339,7 @@ class Actor:
                 writer.writerow(['Episode', 'Actor_Loss', 'Critic_Loss', 'Win_Rate', 'Reward', 'Pos0_Reward', 'Pos1_Reward', 'Pos2_Reward', 'Pos3_Reward', 'Pos4_Reward'])
 
         # Training loop
-        for episode in tqdm(range(epochs)):
+        for episode in (tqdm(range(epochs)) if display_progress_bar else range(epochs)):
             self.env.reset()
             state = self.state()
             last_position_status = [0] * self.env.word_length  # 0: unknown, 1: in word, 2: correct position
@@ -731,7 +741,7 @@ env = Environment("reduced_set.txt")
 A = Actor(env, batch_size=5000, epsilon=0.1, learning_rate=1e-5, actor_repetition=10, critic_repetition=2,
           random_batch=True, sample_size=1000)
 # A.continue_training(model_path='GOOD2_actor_critic_end_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='GOOD2_actor_critic_stats_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=40000, print_freq=1000, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2,batch_size=1024,random_batch=True,sample_size=256)
-A.train(epochs=500000, print_freq=1000, prune=False)
+A.train(epochs=500000, print_freq=5000, display_progress_bar=False)
 
 
 
