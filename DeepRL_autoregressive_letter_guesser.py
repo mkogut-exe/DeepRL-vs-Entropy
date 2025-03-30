@@ -10,6 +10,15 @@ import os
 import csv
 import datetime
 
+"""Autoregressive Letter Guesser using Actor-Critic Reinforcement Learning.
+The agent uses a separate actor and critic network for each letter position in the word.
+The actor network generates letter probabilities based on the game state (which is represented with a 5X26 binary matrix of all possible letters at each position) and previous letters,
+while the critic network evaluates the state for its specific position.
+The agent is trained using Proximal Policy Optimization (PPO) with a custom reward system.
+The training process involves generating words, calculating rewards based on letter positions and updating the networks using experience replay.
+"""
+
+
 # Check torch version and CUDA availability
 torch_version = torch.__version__
 cuda_available = torch.cuda.is_available()

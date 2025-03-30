@@ -8,6 +8,13 @@ from tqdm import tqdm
 import pickle
 import os
 import csv
+"""
+Wordle agent using deep reinforcement learning with input of word vector representation of the all matching words and outputs guessed word.
+
+"""
+
+
+
 
 
 #check torch versin and cuda availability

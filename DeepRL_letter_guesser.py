@@ -8,10 +8,13 @@ from tqdm import tqdm
 import pickle
 import os
 import csv
-from multiprocessing import Pool, cpu_count
-import torch.nn.utils.prune as prune
 import datetime
+"""
+Letter Guesser using Actor-Critic Reinforcement Learning.
+The agent uses a single actor and critic network to individually guess each letter position in the word (in a form of an output 5x26 matrix.
+The actor network generates a probability distribution over the letters for each position, while the critic network evaluates the state for its specific position.
 
+"""
 # Check torch version and CUDA availability
 torch_version = torch.__version__
 cuda_available = torch.cuda.is_available()
