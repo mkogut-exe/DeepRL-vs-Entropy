@@ -31,7 +31,7 @@ def plot_training_metrics(file_path='training_metrics.csv'):
 
     # Set y-axis limits for actor loss (ignore outliers)
     q80_actor = df['Actor_Loss'].quantile(0.80)
-    ax1.set_ylim(-0.7, 0.5)#q80_actor * 4)
+    ax1.set_ylim(-0.7, -q80_actor * 2)
 
     # Plot critic loss (only moving average)
     ax2.plot(df['Episode'], df['Critic_Loss_MA'], 'r-', linewidth=2, label='Critic Loss')
@@ -72,4 +72,4 @@ def plot_training_metrics(file_path='training_metrics.csv'):
 
 
 if __name__ == "__main__":
-    plot_training_metrics(file_path='Stats/Reward_tracking_25_03/training_metrics_20250325164844_ARLGv1+win_epo-80000_AR-10_CR-2_AS-2x256-Lr-1e-05-Bs-1024.csv')
+    plot_training_metrics(file_path='training_metrics_20250326125025_LGv5_-win_epo-80000_AR-10_CR-2_AS-4x256-Lr-1e-05-Bs-1024.csv')

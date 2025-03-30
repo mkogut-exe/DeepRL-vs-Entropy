@@ -8,8 +8,6 @@ from tqdm import tqdm
 import pickle
 import os
 import csv
-from multiprocessing import Pool, cpu_count
-import torch.nn.utils.prune as prune
 import datetime
 
 # Check torch version and CUDA availability
@@ -28,37 +26,44 @@ random.seed(seed)
 def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size, learning_rate, batch_size):
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     return f"_{timestamp}_ARLGv1-win_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
-    # - Rv - Version of the model with no win reward
-    # - epo: Number of epochs
-    # - AR: Actor repetition count
-    # - CR: Critic repetition count
-    # - AS: Actor network size
+    # - ARLGv1: Letter Guesser version 5
+    # - +/-win: Model trained with(+)/without(-) win reward system
+    # - epo: Number of training epochs
+    # - AR: Actor network update repetitions
+    # - CR: Critic network update repetitions
+    # - AS: Actor network architecture size
     # - Lr: Learning rate
     # - Bs: Batch size
 
 
 class Actor:
+    """
+    Actor-Critic agent for Wordle environment
+    - Actor: For each position, MLP taking game state + previous letters
+    - Critic: Parallel architecture to actor for value estimation
+    - Separate optimizers per position network
+    """
     def __init__(self, env: Environment, batch_size=256, discount=0.99, epsilon=0.1, learning_rate=1e-4,
                  actor_repetition=15, critic_repetition=5, prune=False, prune_amount=0.1, prune_freq=1000,
                  sparsity_threshold=0.1, random_batch=False, sample_size=256):
         self.env = env
-        self.discount = discount
-        self.batch_size = batch_size
-        self.actor_repetition = actor_repetition
-        self.critic_repetition = critic_repetition
-        self.epsilon = epsilon
+        self.discount = discount # Discount factor for TD learning
+        self.batch_size = batch_size # Batch size for training
+        self.actor_repetition = actor_repetition # Number of times to update the actor network
+        self.critic_repetition = critic_repetition # Number of times to update the critic network
+        self.epsilon = epsilon # Epsilon for PPO clipping
         self.model_id = ''
-        self.sparsity_threshold = sparsity_threshold
-        self.prune_amount = prune_amount
-        self.prune_freq = prune_freq
-        self.prune = prune
-        self.random_batch = random_batch
-        self.sample_size = sample_size
-        self.learning_rate = learning_rate
+        self.sparsity_threshold = sparsity_threshold #not implemented yet
+        self.prune_amount = prune_amount #not implemented yet
+        self.prune_freq = prune_freq #not implemented yet
+        self.prune = prune #not implemented yet
+        self.random_batch = random_batch # Whether to sample a random batch from the replay buffer
+        self.sample_size = sample_size # Size of the random sample to take from the replay buffer
+        self.learning_rate = learning_rate # Learning rate for the optimizer
 
-        self.allowed_words_length = len(self.env.allowed_words)
-        self.word_to_idx = {word: idx for idx, word in enumerate(self.env.allowed_words)}
-        self.allowed_words_tensor = torch.tensor([self.word_to_idx[w] for w in self.env.allowed_words], device=device)
+        self.allowed_words_length = len(self.env.allowed_words) # Number of allowed words
+        self.word_to_idx = {word: idx for idx, word in enumerate(self.env.allowed_words)} # Mapping from word to index
+        self.allowed_words_tensor = torch.tensor([self.word_to_idx[w] for w in self.env.allowed_words], device=device) # Tensor of allowed words indices
 
         # Base input size is the game state
         base_input_size = self.env.word_length * 26
@@ -71,6 +76,7 @@ class Actor:
             # Position-specific networks
             nn.Sequential(
                 # Input: game state + previous letter context (one-hot encoded)
+                #For position >0: [5x26] state + [pos*26] previous letters one-hot
                 nn.Linear(base_input_size + pos * 26, 256),
                 nn.SiLU(),
                 nn.Linear(256, 256),
@@ -170,6 +176,12 @@ class Actor:
         return torch.FloatTensor(state.flatten()).to(device)  # Flatten the 5x26 array
 
     def act_word(self):
+        # Autoregressive generation process:
+        # 1. For each position, build input with game state + previous letters
+        # 2. Apply current position mask to logits
+        # 3. Sample valid letter while tracking probabilities
+        # 4. Convert to word and validate against dictionary
+        # 5. Fallback to closest valid word if needed
         with torch.no_grad():
             state = self.state()
             word_letters = []
@@ -264,14 +276,43 @@ class Actor:
 
     def train(self, epochs=500, print_freq=50, autosave=False, append_metrics=False, prune_amount=0.1, prune_freq=1000,
               sparsity_threshold=0.1, prune=False):
+
+        """
+                Train the Actor-Critic agents on Wordle games.
+                Training Process:
+                1. Environment reset
+                2. Autoregressive word generation
+                3. Positional reward calculation
+                4. Experience storage in replay buffer
+                5. Batch sampling and network updates
+                6. Periodic metrics logging and model saving
+
+                Reward Calculation Logic (individualy for each A-C pair:
+                - +2 for correct position
+                - +1 for letter in word
+                - -0.5 for regression in letter status
+                Episode reward is the sum of position rewards
+
+                Args:
+                    epochs: Number of training episodes (games)
+                    print_freq: How often to print and save statistics
+                    autosave: Whether to save model checkpoints during training
+                    append_metrics: Whether to append to existing metrics file
+                    prune_amount: Percentage of weights to prune (not fully implemented)
+                    prune_freq: How often to apply pruning (not fully implemented)
+                    sparsity_threshold: Sparsity target for pruning (not fully implemented)
+                    prune: Whether to enable weight pruning (not fully implemented)
+                """
         print("Training...")
         self.prune_amount = prune_amount
         self.prune_freq = prune_freq
         self.sparsity_threshold = sparsity_threshold
         self.prune = prune
+        # Generate unique model ID based on hyperparameters
         self.model_id = create_model_id(epochs=epochs, actor_repetition=self.actor_repetition,
                                         critic_repetition=self.critic_repetition, actor_network_size='2x256',
                                         learning_rate=self.learning_rate, batch_size=self.batch_size)
+        # Initialize tracking variables
         total_wins = 0
         batch_losses_actor = []
         batch_losses_critic = []
@@ -287,6 +328,7 @@ class Actor:
             if not append_metrics:
                 writer.writerow(['Episode', 'Actor_Loss', 'Critic_Loss', 'Win_Rate', 'Reward', 'Pos0_Reward', 'Pos1_Reward', 'Pos2_Reward', 'Pos3_Reward', 'Pos4_Reward'])
 
+        # Training loop
         for episode in tqdm(range(epochs)):
             self.env.reset()
             state = self.state()
@@ -294,6 +336,7 @@ class Actor:
             episode_total_reward = 0  # Track total reward for this episode
             episode_position_rewards = [0] * self.env.word_length  # Track position-specific rewards
 
+            #play game
             for round in range(self.env.max_tries):
                 action, old_prob = self.act_word()
                 word = self.env.allowed_words[action]
@@ -440,6 +483,14 @@ class Actor:
     def batch_update_with_position_rewards(self, states, actions, rewards, position_rewards, next_states, old_action_probs_selected, dones):
         random = self.random_batch
 
+        # Position-specific PPO Update Logic:
+        # 1. Prepare inputs with previous letter context
+        # 2. Calculate TD errors using position-specific critics
+        # 3. Update critics with MSE loss
+        # 4. Calculate importance ratios using old/new probabilities
+        # 5. Apply PPO clipping and update actors
+
+        # Convert lists of states, actions, rewards, etc. to tensors
         states = torch.stack(states)
         actions = torch.tensor(actions, device=device, dtype=torch.long)
         rewards = torch.tensor(rewards, device=device, dtype=torch.float32)
@@ -452,45 +503,54 @@ class Actor:
         batch_size = len(states)
         if random and batch_size > self.sample_size:
             # Split the batch into games based on done flags
+            # This ensures we maintain episode continuity when sampling
             done_indices = (dones == 1).nonzero(as_tuple=True)[0].cpu().numpy()
             game_indices = []
             start = 0
             for end in done_indices:
-                end = end.item()
-                game_indices.append((start, end))
-                start = end + 1
+                end = end.item()  # Extract scalar value from tensor
+                game_indices.append((start, end))  # Store start and end indices of each game
+                start = end + 1  # Next game starts after this one ends
             if start < len(dones):
+                # Add the last incomplete game if present
                 game_indices.append((start, len(dones) - 1))
 
             num_games = len(game_indices)
             if num_games == 0:
+                # If no complete games found, use all transitions
                 indices = torch.arange(batch_size, device=device)
             else:
+                # Randomly sample complete games instead of individual transitions
+                # This preserves the temporal structure within each game
                 shuffled_indices = torch.randperm(num_games, device=device)
                 selected_transitions = []
                 total = 0
                 for i in shuffled_indices:
                     game_start, game_end = game_indices[i]
                     game_length = game_end - game_start + 1
+                    # Skip if this game would exceed sample size limit
                     if total + game_length > self.sample_size and total > 0:
                         continue
+                    # Add all transitions from this game
                     selected_transitions.extend(range(game_start, game_end + 1))
                     total += game_length
+                    # Stop once we've collected enough transitions
                     if total >= self.sample_size:
                         break
                 indices = torch.tensor(selected_transitions, device=device)
 
+            # Extract the selected transitions from the full batch
             batch_states = states[indices]
             batch_actions = actions[indices]
-            batch_rewards = rewards[indices]
             batch_position_rewards = position_rewards_tensor[indices]
             batch_next_states = next_states[indices]
             batch_dones = dones[indices]
             batch_old_probs = old_action_probs_selected[indices]
         else:
+            # If random batching is disabled or batch is smaller than sample size,
+            # use the entire batch without sampling
             batch_states = states
             batch_actions = actions
-            batch_rewards = rewards
             batch_position_rewards = position_rewards_tensor
             batch_next_states = next_states
             batch_dones = dones
@@ -525,6 +585,7 @@ class Actor:
                         prev_onehot[batch_idx, prev_pos * 26 + letter_idx] = 1.0
                         next_prev_onehot[batch_idx, prev_pos * 26 + letter_idx] = 1.0
 
+                # Create input vectors by concatenating game state with previous letter context
                 inputs = torch.cat([batch_states, prev_onehot], dim=1)
                 next_inputs = torch.cat([batch_next_states, next_prev_onehot], dim=1)
 
@@ -557,23 +618,27 @@ class Actor:
                 pos_logits = self.actor[position](inputs)
 
                 # Apply mask based on letter possibilities
-                states_reshaped = batch_states.view(mini_batch_size, self.env.word_length, 26)
-                position_masks = states_reshaped[:, position]
+                states_reshaped = batch_states.view(mini_batch_size, self.env.word_length, 26)  # Reshape to [batch_size, word_length, 26]
+                position_masks = states_reshaped[:, position]  # Extract mask for current position: [batch_size, 26]
+
+                # Apply mask by adding large negative values to impossible letters (where mask=0)
                 masked_logits = pos_logits + (position_masks - 1) * 1e10
 
+                # Convert masked logits to probabilities (impossible letters will have ~0 probability)
                 pos_probs = torch.softmax(masked_logits, dim=1)
 
                 # Get the probability of the selected letter at this position
-                letter_indices = all_letter_indices[:, position]
-                batch_indices = torch.arange(mini_batch_size, device=device)
+                letter_indices = all_letter_indices[:, position]  # Get the actual letter indices chosen at this position
+                batch_indices = torch.arange(mini_batch_size, device=device)  # Create batch indices for advanced indexing
+
+                # Extract probability of the selected letter for each sample using tensor indexing [batch_idx, letter_idx]
                 selected_letter_probs = pos_probs[batch_indices, letter_indices]
 
                 # Calculate importance ratio using position-specific TD errors
                 td_errors_detached = td_errors.detach()
 
                 # Get ratios from old probs (approximate)
-                # Since we don't have per-position old probs, we use batch_old_probs^(1/word_length)
-                # This approximates the contribution of each position to the total probability
+
                 old_letter_probs = torch.pow(batch_old_probs + 1e-10, 1.0 / self.env.word_length)
                 importance_ratios = selected_letter_probs / (old_letter_probs + 1e-10)
                 clipped_ratios = torch.clamp(importance_ratios, 1 - self.epsilon, 1 + self.epsilon)
@@ -663,10 +728,10 @@ class Actor:
 
 
 env = Environment("reduced_set.txt")
-A = Actor(env, batch_size=1024, epsilon=0.1, learning_rate=1e-3, actor_repetition=10, critic_repetition=2,
-          random_batch=True, sample_size=256)
+A = Actor(env, batch_size=5000, epsilon=0.1, learning_rate=1e-5, actor_repetition=10, critic_repetition=2,
+          random_batch=True, sample_size=1000)
 # A.continue_training(model_path='GOOD2_actor_critic_end_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='GOOD2_actor_critic_stats_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=40000, print_freq=1000, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2,batch_size=1024,random_batch=True,sample_size=256)
-A.train(epochs=120000, print_freq=1000, prune=False)
+A.train(epochs=500000, print_freq=1000, prune=False)
 
 
 
