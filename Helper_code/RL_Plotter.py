@@ -81,4 +81,4 @@ def plot_training_metrics(file_path='training_metrics.csv'):
 
 
 if __name__ == "__main__":
-    plot_training_metrics(file_path='Stats/Reward_tracking_25_03/training_metrics_20250325120744_LGv5_-win_epo-40000_AR-10_CR-2_AS-4x256-Lr-1e-05-Bs-1024.csv')
+    plot_training_metrics(file_path='training_metrics_20250330131233_ARLGv1-win_epo-500000_AR-10_CR-2_AS-2x256-Lr-1e-05-Bs-5000.csv')

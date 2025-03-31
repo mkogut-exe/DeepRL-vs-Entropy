@@ -323,10 +323,14 @@ class Actor:
                 """
         print("Training...")
         self.display_progress_bar = display_progress_bar
+
+        #pruning not implemented yet
         self.prune_amount = prune_amount
         self.prune_freq = prune_freq
         self.sparsity_threshold = sparsity_threshold
         self.prune = prune
+
+
         # Generate unique model ID based on hyperparameters
         self.model_id = create_model_id(epochs=epochs, actor_repetition=self.actor_repetition,
                                         critic_repetition=self.critic_repetition, actor_network_size='2x256',
@@ -363,7 +367,64 @@ class Actor:
                 next_state = self.state()
                 done = self.env.end
 
+                """
+                REWARD CALCULATION
+                """
                 # Calculate position-specific rewards
+                pos_rewards_for_transition = [0.0] * self.env.word_length
+
+                # Track letter status changes
+                current_position_status = [0] * self.env.word_length
+                newly_correct = [False] * self.env.word_length
+                newly_in_word = [False] * self.env.word_length
+
+                for i, match in enumerate(matches):
+                    current_position_status[i] = match
+                    newly_correct[i] = (match == 2 and last_position_status[i] != 2)
+                    newly_in_word[i] = (match == 1 and last_position_status[i] == 0)
+
+                # Global rewards
+                solved_bonus = 10.0 if self.env.win else 0.0
+                new_eliminations = 0.3  # Simplified since newly_eliminated_letters() isn't implemented
+                progress_bonus = sum(current_position_status) / self.env.word_length  # Overall progress
+
+                # Position-specific rewards
+                for i in range(self.env.word_length):
+                    # Base improvement rewards
+                    if newly_correct[i]:
+                        pos_rewards_for_transition[i] += 3.0  # Max reward for correct placement
+                    elif newly_in_word[i]:
+                        pos_rewards_for_transition[i] += 1.2  # Bonus for finding new yellow
+
+                    # Maintenance rewards
+                    if current_position_status[i] == 2:
+                        pos_rewards_for_transition[i] += 0.3  # Reward for keeping correct letters
+                    elif current_position_status[i] == 1:
+                        pos_rewards_for_transition[i] += 0.1  # Small reward for maintaining yellow
+
+                    # Add global components
+                    pos_rewards_for_transition[i] += (
+                            solved_bonus +
+                            new_eliminations +
+                            progress_bonus
+                    )
+
+                    # Precision penalty - simplified implementation
+                    if current_position_status[i] == 1:
+                        # Check if the same letter appears as correct (2) elsewhere
+                        letter = word[i]
+                        for j in range(self.env.word_length):
+                            if i != j and word[j] == letter and current_position_status[j] == 2:
+                                pos_rewards_for_transition[i] -= 0.4
+                                break
+
+                # Negative rewards for regressions
+                for i in range(self.env.word_length):
+                    if current_position_status[i] < last_position_status[i]:
+                        pos_rewards_for_transition[i] -= 0.8 * (last_position_status[i] - current_position_status[i])
+
+                #only position rewards
+                """# Calculate position-specific rewards
                 pos_rewards_for_transition = [0.0] * self.env.word_length
 
                 # Parse the match pattern to determine letter status
@@ -386,7 +447,7 @@ class Actor:
 
                     # Small penalty for regression (unlikely but possible)
                     elif current_position_status[i] < last_position_status[i]:
-                        pos_rewards_for_transition[i] = -0.5
+                        pos_rewards_for_transition[i] = -0.5"""
 
 
                 # Update last status for next round
