@@ -18,6 +18,7 @@ The agent is trained using Proximal Policy Optimization (PPO) with a custom rewa
 The training process involves generating words, calculating rewards based on letter positions and updating the networks using experience replay.
 """
 
+
 # Check torch version and CUDA availability
 torch_version = torch.__version__
 cuda_available = torch.cuda.is_available()
@@ -51,35 +52,34 @@ class Actor:
     - Critic: Parallel architecture to actor for value estimation
     - Separate optimizers per position network
     """
-
     def __init__(self, env: Environment, batch_size=256, discount=0.99, epsilon=0.1, learning_rate=1e-4,
                  actor_repetition=15, critic_repetition=5, prune=False, prune_amount=0.1, prune_freq=1000,
-                 sparsity_threshold=0.1, random_batch=False, sample_size=256, display_progress_bar=False):
-        # A-C parameters
-        self.env = env  # Store environment
-        self.discount = discount  # Discount factor for TD learning
-        self.actor_repetition = actor_repetition  # Number of times to update the actor network
-        self.critic_repetition = critic_repetition  # Number of times to update the critic network
-        self.epsilon = epsilon  # Epsilon for PPO clipping
-        self.model_id = ''  # Model ID for saving and loading
+                 sparsity_threshold=0.1, random_batch=False, sample_size=256,display_progress_bar=False):
+        #A-C parameters
+        self.env = env #Store environment
+        self.discount = discount # Discount factor for TD learning
+        self.actor_repetition = actor_repetition # Number of times to update the actor network
+        self.critic_repetition = critic_repetition # Number of times to update the critic network
+        self.epsilon = epsilon # Epsilon for PPO clipping
+        self.model_id = '' # Model ID for saving and loading
 
-        # PRUNE (not implemented yet)
-        self.sparsity_threshold = sparsity_threshold  # not implemented yet
-        self.prune_amount = prune_amount  # not implemented yet
-        self.prune_freq = prune_freq  # not implemented yet
-        self.prune = prune  # not implemented yet
 
-        # BATCH
+        #PRUNE (not implemented yet)
+        self.sparsity_threshold = sparsity_threshold #not implemented yet
+        self.prune_amount = prune_amount #not implemented yet
+        self.prune_freq = prune_freq #not implemented yet
+        self.prune = prune #not implemented yet
+
+        #BATCH
         self.batch_size = batch_size  # Batch size for training
-        self.random_batch = random_batch  # Whether to sample a random batch from the replay buffer
-        self.sample_size = sample_size  # Size of the random sample to take from the replay buffer
-        self.learning_rate = learning_rate  # Learning rate for the optimizer
+        self.random_batch = random_batch # Whether to sample a random batch from the replay buffer
+        self.sample_size = sample_size # Size of the random sample to take from the replay buffer
+        self.learning_rate = learning_rate # Learning rate for the optimizer
 
-        # ENVIRONMENT
-        self.allowed_words_length = len(self.env.allowed_words)  # Number of allowed words
-        self.word_to_idx = {word: idx for idx, word in enumerate(self.env.allowed_words)}  # Mapping from word to index
-        self.allowed_words_tensor = torch.tensor([self.word_to_idx[w] for w in self.env.allowed_words],
-                                                 device=device)  # Tensor of allowed words indices
+        #ENVIRONMENT
+        self.allowed_words_length = len(self.env.allowed_words) # Number of allowed words
+        self.word_to_idx = {word: idx for idx, word in enumerate(self.env.allowed_words)} # Mapping from word to index
+        self.allowed_words_tensor = torch.tensor([self.word_to_idx[w] for w in self.env.allowed_words], device=device) # Tensor of allowed words indices
 
         self.display_progress_bar = False  # Whether to display progress bar during training
 
@@ -94,7 +94,7 @@ class Actor:
             # Position-specific networks
             nn.Sequential(
                 # Input: game state + previous letter context (one-hot encoded)
-                # For position >0: [5x26] state + [pos*26] previous letters one-hot
+                #For position >0: [5x26] state + [pos*26] previous letters one-hot
                 nn.Linear(base_input_size + pos * 26, 256),
                 nn.SiLU(),
                 nn.Linear(256, 256),
@@ -129,7 +129,7 @@ class Actor:
             optim.Adam(network.parameters(), lr=self.learning_rate)
             for network in self.actor
         ]
-
+        
         self.optimizer_critic = [
             optim.Adam(network.parameters(), lr=self.learning_rate)
             for network in self.critic
@@ -143,8 +143,8 @@ class Actor:
             'reward_history': {},  # This will store episode -> reward mapping
             'position_rewards': {i: [] for i in range(self.env.word_length)},  # Track rewards per position
             'results': {},
-            'actor_losses': [],  # Track all actor losses
-            'critic_losses': [],  # Track all critic losses
+            'actor_losses': [],    # Track all actor losses
+            'critic_losses': [],   # Track all critic losses
             'episode_rewards': [],  # Track rewards per episode
             'avg_actor_losses': [],  # Track average actor losses per reporting period
             'avg_critic_losses': []  # Track average critic losses per reporting period
@@ -166,7 +166,7 @@ class Actor:
     def save_stats(self, path):
         with open(path, 'wb') as f:
             pickle.dump(self.stats, f)
-
+        
         # Also save losses and rewards as CSV for easier analysis
 
     def save_training_metrics(self, episode, actor_loss, critic_loss, win_rate, avg_reward,
@@ -191,23 +191,19 @@ class Actor:
 
     def state(self):
         state = self.env.get_letter_possibilities_from_matches(self.env.find_matches())
-        print(self.env.try_count)
-        print(state)
         return torch.FloatTensor(state.flatten()).to(device)  # Flatten the 5x26 array
 
-    # Autoregressive generation process:
-    # 1. For each position, build input with game state + previous letters
-    # 2. Apply current position mask to logits
-    # 3. Sample valid letter while tracking probabilities
-    # 4. Convert to word and validate against dictionary
-    # 5. Fallback to closest valid word if needed
-
     def act_word(self):
-        """Generate a word autoregressively, tracking probabilities per position"""
+        # Autoregressive generation process:
+        # 1. For each position, build input with game state + previous letters
+        # 2. Apply current position mask to logits
+        # 3. Sample valid letter while tracking probabilities
+        # 4. Convert to word and validate against dictionary
+        # 5. Fallback to closest valid word if needed
         with torch.no_grad():
             state = self.state()
             word_letters = []
-            position_probs = []  # Store probability for each letter position
+            letter_probs = []
 
             # Generate each letter autoregressively
             for position in range(self.env.word_length):
@@ -222,10 +218,10 @@ class Actor:
                         previous_letters_onehot[prev_pos * 26 + letter_idx] = 1.0
                     input_vector = torch.cat([state, previous_letters_onehot])
 
-                # Get logits from position-specific network
+                # Get logits for this position from the position-specific network
                 logits = self.actor[position](input_vector)
 
-                # Apply mask for valid letters
+                # Apply mask based on letter possibilities
                 state_reshaped = state.view(self.env.word_length, 26)
                 position_mask = state_reshaped[position]
                 masked_logits = logits + (position_mask - 1) * 1e8
@@ -234,31 +230,35 @@ class Actor:
                 probs = torch.softmax(masked_logits, dim=0)
 
                 # Sample letter based on probabilities
-                valid_indices = torch.where(position_mask > 0)[0]
-                if len(valid_indices) == 0 or torch.sum(probs) <= 1e-10:
-                    # Fallback if no valid letters
-                    letter_idx = random.choice(range(26)) if len(valid_indices) == 0 else random.choice(
-                        valid_indices.tolist())
-                    letter_prob = 1.0 / max(1, len(valid_indices))
+                if torch.sum(probs) <= 1e-10:
+                    # If all probabilities are essentially zero, pick a valid letter uniformly
+                    valid_indices = torch.where(position_mask > 0)[0]
+                    if len(valid_indices) == 0:
+                        # Fallback if no valid letters (shouldn't happen)
+                        letter_idx = random.randrange(26)
+                    else:
+                        letter_idx = valid_indices[random.randrange(len(valid_indices))].item()
+                    letter_prob = 1.0 / len(valid_indices) if len(valid_indices) > 0 else 1e-8
                 else:
                     letter_idx = torch.multinomial(probs, 1).item()
                     letter_prob = probs[letter_idx].item()
 
                 word_letters.append(letter_idx)
-                position_probs.append(letter_prob)  # Store probability of selected letter
+                letter_probs.append(letter_prob)
 
             # Convert letter indices to word
             generated_word = ''.join(chr(idx + ord('a')) for idx in word_letters)
 
-            # Find closest valid word if needed
+            # Find closest valid word
             if generated_word in self.word_to_idx:
                 action = self.word_to_idx[generated_word]
+                action_prob = torch.prod(torch.tensor(letter_probs)).item()
             else:
-                # Find closest valid word from matches
+                # If generated word isn't valid, find closest valid word
                 matching_words = self.env.find_matches()
                 if not matching_words:
-                    return random.randrange(len(self.env.allowed_words)), [torch.tensor(1e-8,
-                                                                                        device=device)] * self.env.word_length
+                    # Fallback if no matching words
+                    return random.randrange(len(self.env.allowed_words)), torch.tensor(1e-8, device=device)
 
                 # Find word with most matching letters
                 best_match = None
@@ -268,9 +268,29 @@ class Actor:
                     if score > best_score:
                         best_score = score
                         best_match = word
-                action = self.word_to_idx[best_match]
 
-            return action, [torch.tensor(p, device=device) for p in position_probs]
+                action = self.word_to_idx[best_match]
+                # Approximate probability - product of probabilities of matching letters
+                action_prob = 1e-8
+
+            return action, torch.tensor(action_prob, device=device)
+
+            # Convert to tensor and normalize
+            word_probs = torch.tensor(word_probs, device=device)
+
+            # Handle case where all probs are 0
+            if word_probs.sum() <= 1e-10:
+                chosen_idx = random.choice(indices)
+                return chosen_idx, torch.tensor(1e-8, device=device)
+
+            word_probs = word_probs / word_probs.sum()
+
+            # Sample word according to probabilities
+            chosen_idx_in_list = torch.multinomial(word_probs, 1).item()
+            action = indices[chosen_idx_in_list]
+
+            return action, word_probs[chosen_idx_in_list]
+
 
     def train(self, epochs=500, print_freq=50, autosave=False, append_metrics=False, prune_amount=0.1, prune_freq=1000,
               sparsity_threshold=0.1, prune=False, display_progress_bar=False):
@@ -304,11 +324,12 @@ class Actor:
         print("Training...")
         self.display_progress_bar = display_progress_bar
 
-        # pruning not implemented yet
+        #pruning not implemented yet
         self.prune_amount = prune_amount
         self.prune_freq = prune_freq
         self.sparsity_threshold = sparsity_threshold
         self.prune = prune
+
 
         # Generate unique model ID based on hyperparameters
         self.model_id = create_model_id(epochs=epochs, actor_repetition=self.actor_repetition,
@@ -328,9 +349,7 @@ class Actor:
         with open(f'training_metrics{self.model_id}.csv', 'a' if append_metrics else 'w', newline='') as f:
             writer = csv.writer(f)
             if not append_metrics:
-                writer.writerow(
-                    ['Episode', 'Actor_Loss', 'Critic_Loss', 'Win_Rate', 'Reward', 'Pos0_Reward', 'Pos1_Reward',
-                     'Pos2_Reward', 'Pos3_Reward', 'Pos4_Reward'])
+                writer.writerow(['Episode', 'Actor_Loss', 'Critic_Loss', 'Win_Rate', 'Reward', 'Pos0_Reward', 'Pos1_Reward', 'Pos2_Reward', 'Pos3_Reward', 'Pos4_Reward'])
 
         # Training loop
         for episode in (tqdm(range(epochs)) if display_progress_bar else range(epochs)):
@@ -340,9 +359,9 @@ class Actor:
             episode_total_reward = 0  # Track total reward for this episode
             episode_position_rewards = [0] * self.env.word_length  # Track position-specific rewards
 
-            # play game
+            #play game
             for round in range(self.env.max_tries):
-                action, position_probs = self.act_word()  # Now returns probs per position
+                action, old_prob = self.act_word()
                 word = self.env.allowed_words[action]
                 matches = self.env.guess(word)
                 next_state = self.state()
@@ -404,7 +423,7 @@ class Actor:
                     if current_position_status[i] < last_position_status[i]:
                         pos_rewards_for_transition[i] -= 0.8 * (last_position_status[i] - current_position_status[i])
 
-                # only position rewards
+                #only position rewards
                 """# Calculate position-specific rewards
                 pos_rewards_for_transition = [0.0] * self.env.word_length
 
@@ -430,6 +449,7 @@ class Actor:
                     elif current_position_status[i] < last_position_status[i]:
                         pos_rewards_for_transition[i] = -0.5"""
 
+
                 # Update last status for next round
                 last_position_status = current_position_status
 
@@ -442,7 +462,7 @@ class Actor:
                     episode_position_rewards[i] += pos_rewards_for_transition[i]
 
                 # Add transition to replay buffer with position-specific rewards
-                replay_buffer.append((state, action, reward, pos_rewards_for_transition, next_state, position_probs, done))
+                replay_buffer.append((state, action, reward, pos_rewards_for_transition, next_state, old_prob, done))
 
                 # Process in batches when buffer reaches batch size
                 if len(replay_buffer) >= self.batch_size:
@@ -503,8 +523,7 @@ class Actor:
                 self.stats['avg_critic_losses'].append(avg_loss_critic)
 
                 # Calculate average position rewards
-                pos_avg_rewards = [np.mean(pos_rewards) if pos_rewards else 0 for pos_rewards in
-                                   position_rewards_tracking]
+                pos_avg_rewards = [np.mean(pos_rewards) if pos_rewards else 0 for pos_rewards in position_rewards_tracking]
 
                 # Save metrics including position-specific rewards
                 self.save_training_metrics(
@@ -541,7 +560,7 @@ class Actor:
         self.save_stats(f'actor_critic_stats{self.model_id}.pkl')
         print("Training finished.")
 
-    def batch_update_with_position_rewards(self, states, actions, rewards, position_rewards, next_states, old_position_probs, dones):
+    def batch_update_with_position_rewards(self, states, actions, rewards, position_rewards, next_states, old_action_probs_selected, dones):
         random = self.random_batch
 
         # Position-specific PPO Update Logic:
@@ -554,10 +573,10 @@ class Actor:
         # Convert lists of states, actions, rewards, etc. to tensors
         states = torch.stack(states)
         actions = torch.tensor(actions, device=device, dtype=torch.long)
-
+        rewards = torch.tensor(rewards, device=device, dtype=torch.float32)
         position_rewards_tensor = torch.tensor(position_rewards, device=device, dtype=torch.float32)
         next_states = torch.stack(next_states)
-
+        old_action_probs_selected = torch.tensor(old_action_probs_selected, device=device, dtype=torch.float32)
         dones = torch.tensor(dones, device=device, dtype=torch.float32)
 
         # Get batch indices to use
@@ -606,6 +625,7 @@ class Actor:
             batch_position_rewards = position_rewards_tensor[indices]
             batch_next_states = next_states[indices]
             batch_dones = dones[indices]
+            batch_old_probs = old_action_probs_selected[indices]
         else:
             # If random batching is disabled or batch is smaller than sample size,
             # use the entire batch without sampling
@@ -614,6 +634,7 @@ class Actor:
             batch_position_rewards = position_rewards_tensor
             batch_next_states = next_states
             batch_dones = dones
+            batch_old_probs = old_action_probs_selected
 
         # Convert word indices to letter indices
         mini_batch_size = batch_states.size(0)
@@ -625,7 +646,7 @@ class Actor:
         # Track losses for reporting
         critic_losses = []
         actor_losses = []
-        print(old_position_probs) #TODO
+
         # Process each position separately
         for position in range(self.env.word_length):
             # Prepare inputs for this position
@@ -651,7 +672,6 @@ class Actor:
             # Use position-specific rewards
             position_specific_rewards = batch_position_rewards[:, position]
 
-
             # Critic update for this position
             with torch.no_grad():
                 current_values = self.critic[position](inputs).squeeze(-1)
@@ -670,11 +690,6 @@ class Actor:
                 # Add to persistent stats
                 self.stats['critic_losses'].append(critic_loss.item())
 
-
-            # Get old probabilities specific to this position
-            old_position_specific_probs = torch.stack([probs[position] for probs in old_position_probs])
-
-
             # Actor update for this position
             for _ in range(self.actor_repetition):
                 self.optimizer_actor[position].zero_grad()
@@ -683,8 +698,7 @@ class Actor:
                 pos_logits = self.actor[position](inputs)
 
                 # Apply mask based on letter possibilities
-                states_reshaped = batch_states.view(mini_batch_size, self.env.word_length,
-                                                    26)  # Reshape to [batch_size, word_length, 26]
+                states_reshaped = batch_states.view(mini_batch_size, self.env.word_length, 26)  # Reshape to [batch_size, word_length, 26]
                 position_masks = states_reshaped[:, position]  # Extract mask for current position: [batch_size, 26]
 
                 # Apply mask by adding large negative values to impossible letters (where mask=0)
@@ -693,9 +707,11 @@ class Actor:
                 # Convert masked logits to probabilities (impossible letters will have ~0 probability)
                 pos_probs = torch.softmax(masked_logits, dim=1)
 
-                # Get probability of selected letter at this position
-                letter_indices = all_letter_indices[:, position]
-                batch_indices = torch.arange(mini_batch_size, device=device)
+                # Get the probability of the selected letter at this position
+                letter_indices = all_letter_indices[:, position]  # Get the actual letter indices chosen at this position
+                batch_indices = torch.arange(mini_batch_size, device=device)  # Create batch indices for advanced indexing
+
+                # Extract probability of the selected letter for each sample using tensor indexing [batch_idx, letter_idx]
                 selected_letter_probs = pos_probs[batch_indices, letter_indices]
 
                 # Calculate importance ratio using position-specific TD errors
@@ -703,7 +719,8 @@ class Actor:
 
                 # Get ratios from old probs (approximate)
 
-                importance_ratios = selected_letter_probs / (old_position_specific_probs + 1e-10)
+                old_letter_probs = torch.pow(batch_old_probs + 1e-10, 1.0 / self.env.word_length)
+                importance_ratios = selected_letter_probs / (old_letter_probs + 1e-10)
                 clipped_ratios = torch.clamp(importance_ratios, 1 - self.epsilon, 1 + self.epsilon)
 
                 # Calculate loss using the TD error from the corresponding critic
@@ -791,10 +808,10 @@ class Actor:
 
 
 env = Environment("reduced_set.txt")
-A = Actor(env, batch_size=1, epsilon=0.1, learning_rate=1e-5, actor_repetition=1, critic_repetition=1,
-          random_batch=True, sample_size=1, display_progress_bar=True)
+A = Actor(env, batch_size=1000, epsilon=0.1, learning_rate=1e-6, actor_repetition=10, critic_repetition=2,
+          random_batch=True, sample_size=250, display_progress_bar=True)
 # A.continue_training(model_path='GOOD2_actor_critic_end_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='GOOD2_actor_critic_stats_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=40000, print_freq=1000, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2,batch_size=1024,random_batch=True,sample_size=256)
-A.train(epochs=1, print_freq=1, display_progress_bar=True)
+A.train(epochs=100000, print_freq=1000, display_progress_bar=True)
 
 
 
