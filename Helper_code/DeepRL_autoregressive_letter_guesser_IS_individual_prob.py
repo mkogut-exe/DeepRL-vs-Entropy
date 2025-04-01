@@ -630,6 +630,8 @@ class Actor:
         #print()
         #print(f"old {old_position_probs}")
 
+
+        # Process each position separately
         for position in range(self.env.word_length):
             # Prepare inputs for this position
             if position == 0:
@@ -708,36 +710,13 @@ class Actor:
                 td_errors_detached = td_errors.detach()
 
                 # Get ratios from old probs (approximate)
-                #importance sampling ratio product calculation
-                importance_ratio_product = torch.ones(mini_batch_size, device=device)
 
-                for pos in range(self.env.word_length):
-                    if pos == 0:
-                        in_data = batch_states
-                    else:
-                        prev_letters = all_letter_indices[:, :pos]
-                        prev_onehot = torch.zeros(mini_batch_size, pos * 26, device=device)
-                        for batch_idx in range(mini_batch_size):
-                            for prev_pos, letter_idx in enumerate(prev_letters[batch_idx]):
-                                prev_onehot[batch_idx, prev_pos * 26 + letter_idx] = 1.0
-                        in_data = torch.cat([batch_states, prev_onehot], dim=1)
-
-                    pos_logits_inner = self.actor[pos](in_data)
-                    position_masks_inner = states_reshaped[:, pos]
-                    masked_logits_inner = pos_logits_inner + (position_masks_inner - 1) * 1e10
-                    pos_probs_inner = torch.softmax(masked_logits_inner, dim=1)
-                    letter_indices_inner = all_letter_indices[:, pos]
-                    batch_indices = torch.arange(mini_batch_size, device=device)
-                    selected_letter_probs_inner = pos_probs_inner[batch_indices, letter_indices_inner]
-                    old_position_specific_probs_inner = torch.stack([probs[pos] for probs in batch_old_probs])
-                    ratio = selected_letter_probs_inner / (old_position_specific_probs_inner + 1e-10)
-                    importance_ratio_product *= ratio
-
-                clipped_ratios = torch.clamp(importance_ratio_product, 1 - self.epsilon, 1 + self.epsilon)
+                importance_ratios = selected_letter_probs / (old_position_specific_probs + 1e-10)
+                clipped_ratios = torch.clamp(importance_ratios, 1 - self.epsilon, 1 + self.epsilon)
 
                 # Calculate loss using the TD error from the corresponding critic
                 loss = torch.min(
-                    importance_ratio_product * td_errors_detached,
+                    importance_ratios * td_errors_detached,
                     clipped_ratios * td_errors_detached
                 )
                 actor_loss = -loss.mean()
@@ -820,10 +799,10 @@ class Actor:
 
 
 env = Environment("reduced_set.txt")
-A = Actor(env, batch_size=20, epsilon=0.1, learning_rate=1e-5, actor_repetition=10, critic_repetition=2,
-          random_batch=True, sample_size=10, display_progress_bar=True)
+A = Actor(env, batch_size=10, epsilon=0.1, learning_rate=1e-5, actor_repetition=2, critic_repetition=2,
+          random_batch=True, sample_size=2, display_progress_bar=True)
 # A.continue_training(model_path='GOOD2_actor_critic_end_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='GOOD2_actor_critic_stats_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=40000, print_freq=1000, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2,batch_size=1024,random_batch=True,sample_size=256)
-A.train(epochs=200, print_freq=20, display_progress_bar=True)
+A.train(epochs=200, print_freq=10, display_progress_bar=True)
 
 
 
