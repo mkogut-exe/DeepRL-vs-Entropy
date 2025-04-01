@@ -674,9 +674,6 @@ class Actor:
                 self.stats['critic_losses'].append(critic_loss.item())
 
 
-            # Get old probabilities specific to this position
-            old_position_specific_probs = torch.stack([probs[position] for probs in batch_old_probs])
-
 
             # Actor update for this position
             for _ in range(self.actor_repetition):
@@ -709,7 +706,7 @@ class Actor:
 
                 # Get ratios from old probs (approximate)
                 #importance sampling ratio product calculation
-                importance_ratio_product = torch.ones(mini_batch_size, device=device)
+                log_ratio_sum = torch.zeros(mini_batch_size, device=device)
 
                 for pos in range(self.env.word_length):
                     if pos == 0:
@@ -730,9 +727,11 @@ class Actor:
                     batch_indices = torch.arange(mini_batch_size, device=device)
                     selected_letter_probs_inner = pos_probs_inner[batch_indices, letter_indices_inner]
                     old_position_specific_probs_inner = torch.stack([probs[pos] for probs in batch_old_probs])
-                    ratio = selected_letter_probs_inner / (old_position_specific_probs_inner + 1e-10)
-                    importance_ratio_product *= ratio
+                    #Use log to avoid numerical instability
+                    log_ratio = torch.log(selected_letter_probs_inner + 1e-10) - torch.log(old_position_specific_probs_inner + 1e-10)
+                    log_ratio_sum += log_ratio
 
+                importance_ratio_product = torch.exp(log_ratio_sum)
                 clipped_ratios = torch.clamp(importance_ratio_product, 1 - self.epsilon, 1 + self.epsilon)
 
                 # Calculate loss using the TD error from the corresponding critic
