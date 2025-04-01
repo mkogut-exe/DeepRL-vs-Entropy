@@ -233,7 +233,7 @@ class Actor:
 
                 # Sample letter based on probabilities
                 valid_indices = torch.where(position_mask > 0)[0]
-                if len(valid_indices) == 0 or torch.sum(probs) <= 1e-10:
+                if len(valid_indices) == 0 or torch.sum(probs) <= 1e-8:
                     # Fallback if no valid letters
                     letter_idx = random.choice(range(26)) if len(valid_indices) == 0 else random.choice(
                         valid_indices.tolist())
@@ -719,13 +719,15 @@ class Actor:
 
                     pos_logits_inner = self.actor[pos](in_data)
                     position_masks_inner = states_reshaped[:, pos]
-                    masked_logits_inner = pos_logits_inner + (position_masks_inner - 1) * 1e10
+                    masked_logits_inner = pos_logits_inner + (position_masks_inner - 1) * 1e8
                     pos_probs_inner = torch.softmax(masked_logits_inner, dim=1)
                     letter_indices_inner = all_letter_indices[:, pos]
                     batch_indices = torch.arange(mini_batch_size, device=device)
                     selected_letter_probs_inner = pos_probs_inner[batch_indices, letter_indices_inner]
                     old_position_specific_probs_inner = torch.stack([probs[pos] for probs in batch_old_probs])
-                    ratio = selected_letter_probs_inner / (old_position_specific_probs_inner + 1e-10)
+                    ratio = selected_letter_probs_inner / (old_position_specific_probs_inner + 1e-8)
+                    if ratio>100000:
+                        print(f"ratio {ratio}, selected_letter_probs_inner {selected_letter_probs_inner}, old_position_specific_probs_inner {old_position_specific_probs_inner}")
                     clipped_ratio = torch.clamp(ratio, 1 - self.epsilon, 1 + self.epsilon)
                     importance_ratio_product *= clipped_ratio
 
