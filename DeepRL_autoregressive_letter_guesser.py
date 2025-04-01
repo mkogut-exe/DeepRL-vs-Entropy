@@ -673,8 +673,6 @@ class Actor:
                 # Add to persistent stats
                 self.stats['critic_losses'].append(critic_loss.item())
 
-
-
             # Actor update for this position
             for _ in range(self.actor_repetition):
                 self.optimizer_actor[position].zero_grad()
@@ -706,7 +704,7 @@ class Actor:
 
                 # Get ratios from old probs (approximate)
                 #importance sampling ratio product calculation
-                log_ratio_sum = torch.zeros(mini_batch_size, device=device)
+                importance_ratio_product = torch.ones(mini_batch_size, device=device)
 
                 for pos in range(self.env.word_length):
                     if pos == 0:
@@ -727,17 +725,17 @@ class Actor:
                     batch_indices = torch.arange(mini_batch_size, device=device)
                     selected_letter_probs_inner = pos_probs_inner[batch_indices, letter_indices_inner]
                     old_position_specific_probs_inner = torch.stack([probs[pos] for probs in batch_old_probs])
-                    #Use log to avoid numerical instability
-                    log_ratio = torch.log(selected_letter_probs_inner + 1e-10) - torch.log(old_position_specific_probs_inner + 1e-10)
-                    log_ratio_sum += log_ratio
-                    
-                importance_ratio_product = torch.exp(log_ratio_sum)
-                clipped_ratios = torch.clamp(importance_ratio_product, 1 - self.epsilon, 1 + self.epsilon)
+                    ratio = selected_letter_probs_inner / (old_position_specific_probs_inner + 1e-10)
+                    clipped_ratio = torch.clamp(ratio, 1 - self.epsilon, 1 + self.epsilon)
+                    importance_ratio_product *= clipped_ratio
+
+                clipped_importance = torch.clamp(importance_ratio_product, 1 - self.epsilon, 1 + self.epsilon)
+
 
                 # Calculate loss using the TD error from the corresponding critic
                 loss = torch.min(
                     importance_ratio_product * td_errors_detached,
-                    clipped_ratios * td_errors_detached
+                    clipped_importance * td_errors_detached
                 )
                 actor_loss = -loss.mean()
 
