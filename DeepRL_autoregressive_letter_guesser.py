@@ -191,8 +191,6 @@ class Actor:
 
     def state(self):
         state = self.env.get_letter_possibilities_from_matches(self.env.find_matches())
-        print(self.env.try_count)
-        print(state)
         return torch.FloatTensor(state.flatten()).to(device)  # Flatten the 5x26 array
 
     # Autoregressive generation process:
@@ -625,7 +623,13 @@ class Actor:
         # Track losses for reporting
         critic_losses = []
         actor_losses = []
-        print(old_position_probs) #TODO
+        """print(old_position_probs) #TODO
+        print(f"Position {position} old probs:", old_position_probs)
+        # Print current selected letter probabilities
+        print(f"Position {position} selected letters:", letter_indices[:5])  # Show first 5 for brevity
+        print(f"Position {position} current probs:", selected_letter_probs[:5])  # Show first 5 for brevity"""
+
+
         # Process each position separately
         for position in range(self.env.word_length):
             # Prepare inputs for this position
