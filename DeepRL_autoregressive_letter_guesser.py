@@ -727,7 +727,9 @@ class Actor:
                     old_position_specific_probs_inner = torch.stack([probs[pos] for probs in batch_old_probs])
                     ratio = selected_letter_probs_inner / (old_position_specific_probs_inner + 1e-8)
                     if ratio.max() > 100000:
-                        print(f"ratio {ratio}, selected_letter_probs_inner {selected_letter_probs_inner}, old_position_specific_probs_inner {old_position_specific_probs_inner}")
+                        print(f"MAX ratio {ratio}, selected_letter_probs_inner {selected_letter_probs_inner}, old_position_specific_probs_inner {old_position_specific_probs_inner}")
+                    elif ratio.min() < 0.000001:
+                        print(f"MIN ratio {ratio}, selected_letter_probs_inner {selected_letter_probs_inner}, old_position_specific_probs_inner {old_position_specific_probs_inner}")
                     clipped_ratio = torch.clamp(ratio, 1 - self.epsilon, 1 + self.epsilon)
                     importance_ratio_product *= clipped_ratio
 
