@@ -9,6 +9,7 @@ import pickle
 import os
 import csv
 import datetime
+import torch.nn.functional as F
 
 
 """Autoregressive Letter Guesser using Actor-Critic Reinforcement Learning.
@@ -698,32 +699,41 @@ class Actor:
                 importance_ratio_product = torch.ones(mini_batch_size, device=device)
 
                 for pos in range(self.env.word_length):
+                    # Create input data for current position
                     if pos == 0:
                         in_data = batch_states
                     else:
+                        # Get previous letter indices for all samples
                         prev_letters = all_letter_indices[:, :pos]
-                        prev_onehot = torch.zeros(mini_batch_size, pos * 26, device=device)
-                        for batch_idx in range(mini_batch_size):
-                            for prev_pos, letter_idx in enumerate(prev_letters[batch_idx]):
-                                prev_onehot[batch_idx, prev_pos * 26 + letter_idx] = 1.0
+
+                        # Create one-hot encodings using F.one_hot (more efficient)
+                        prev_onehot_3d = F.one_hot(prev_letters, num_classes=26).float()
+                        # Reshape to [batch_size, pos*26]
+                        prev_onehot = prev_onehot_3d.reshape(mini_batch_size, -1)
+
+                        # Concatenate with state
                         in_data = torch.cat([batch_states, prev_onehot], dim=1)
 
+                    # Process through actor network
                     pos_logits_inner = self.actor[pos](in_data)
                     position_masks_inner = states_reshaped[:, pos]
+
+                    # Apply mask and get probabilities
                     masked_logits_inner = pos_logits_inner + (position_masks_inner - 1) * 1e8
                     pos_probs_inner = torch.softmax(masked_logits_inner, dim=1)
+
+                    # Get probabilities of selected letters
                     letter_indices_inner = all_letter_indices[:, pos]
                     batch_indices = torch.arange(mini_batch_size, device=device)
                     selected_letter_probs_inner = pos_probs_inner[batch_indices, letter_indices_inner]
+
+                    # Stack old probabilities more efficiently
                     old_position_specific_probs_inner = torch.stack([probs[pos] for probs in batch_old_probs])
-
-                    #clip to avoid extreme values
                     old_position_specific_probs_inner = torch.clamp(old_position_specific_probs_inner, 1e-8, 1.0)
-                    # Calculate importance ratio for 1 position
-                    ratio = selected_letter_probs_inner / (old_position_specific_probs_inner + 1e-8)
 
-                    #Clip the ratio to avoid extreme values
-                    clipped_ratio = torch.clamp(ratio,1 - 2*self.epsilon, 1 + 2*self.epsilon)
+                    # Calculate importance ratio for this position
+                    ratio = selected_letter_probs_inner / old_position_specific_probs_inner
+                    clipped_ratio = torch.clamp(ratio, 1 - 2 * self.epsilon, 1 + 2 * self.epsilon)
                     # Calculate importance ratio product
                     importance_ratio_product *= clipped_ratio
 
@@ -818,7 +828,7 @@ env = Environment("reduced_set.txt")
 A = Actor(env, batch_size=5000, epsilon=0.1, learning_rate=1e-5, actor_repetition=10, critic_repetition=2,
           random_batch=True, sample_size=1000, display_progress_bar=True)
 # A.continue_training(model_path='GOOD2_actor_critic_end_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='GOOD2_actor_critic_stats_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=40000, print_freq=1000, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2,batch_size=1024,random_batch=True,sample_size=256)
-A.train(epochs=500000, print_freq=5000, display_progress_bar=True)
+A.train(epochs=100000, print_freq=5000, display_progress_bar=True)
 
 
 
