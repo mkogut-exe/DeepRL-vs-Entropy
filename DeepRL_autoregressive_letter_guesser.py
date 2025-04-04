@@ -97,14 +97,14 @@ class Actor:
             nn.Sequential(
                 # Input: game state + previous letter context (one-hot encoded)
                 # For position >0: [5x26] state + [pos*26] previous letters one-hot
-                nn.Linear(base_input_size + pos * 26, 256),
+                nn.Linear(base_input_size + pos * 26, 128),
                 nn.SiLU(),
-                nn.Linear(256, 256),
+                nn.Linear(128, 128),
                 nn.SiLU(),
-                nn.LayerNorm(256),
+                nn.LayerNorm(128),
                 nn.SiLU(),
                 # Output: probability distribution over 26 letters for this position
-                nn.Linear(256, 26)
+                nn.Linear(128, 26)
             ).to(device)
             for pos in range(self.env.word_length)
         ])
@@ -114,11 +114,11 @@ class Actor:
         self.critic = nn.ModuleList([
             nn.Sequential(
                 # Input: game state + previous letter context (like the actor)
-                nn.Linear(base_input_size + pos * 26, 256),
+                nn.Linear(base_input_size + pos * 26, 128),
                 nn.SiLU(),
-                nn.Linear(256, 256),
+                nn.Linear(128, 128),
                 nn.SiLU(),
-                nn.Linear(256, 1),
+                nn.Linear(128, 1),
             ).to(device)
             for pos in range(self.env.word_length)
         ])
@@ -309,7 +309,7 @@ class Actor:
 
         # Generate unique model ID based on hyperparameters
         self.model_id = create_model_id(epochs=epochs, actor_repetition=self.actor_repetition,
-                                        critic_repetition=self.critic_repetition, actor_network_size='1x256',
+                                        critic_repetition=self.critic_repetition, actor_network_size='1x128',
                                         learning_rate=self.learning_rate, batch_size=self.batch_size)
         # Initialize tracking variables
         total_wins = 0
