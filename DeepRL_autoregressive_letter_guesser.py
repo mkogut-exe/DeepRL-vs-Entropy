@@ -101,11 +101,6 @@ class Actor:
                 nn.SiLU(),
                 nn.Linear(256, 256),
                 nn.SiLU(),
-                nn.Linear(256, 256),
-                nn.SiLU(),
-                nn.Linear(256, 256),
-                nn.SiLU(),
-                nn.Linear(256, 256),
                 nn.LayerNorm(256),
                 nn.SiLU(),
                 # Output: probability distribution over 26 letters for this position
@@ -120,10 +115,6 @@ class Actor:
             nn.Sequential(
                 # Input: game state + previous letter context (like the actor)
                 nn.Linear(base_input_size + pos * 26, 256),
-                nn.SiLU(),
-                nn.Linear(256, 256),
-                nn.SiLU(),
-                nn.Linear(256, 256),
                 nn.SiLU(),
                 nn.Linear(256, 256),
                 nn.SiLU(),
@@ -318,7 +309,7 @@ class Actor:
 
         # Generate unique model ID based on hyperparameters
         self.model_id = create_model_id(epochs=epochs, actor_repetition=self.actor_repetition,
-                                        critic_repetition=self.critic_repetition, actor_network_size='4x256',
+                                        critic_repetition=self.critic_repetition, actor_network_size='1x256',
                                         learning_rate=self.learning_rate, batch_size=self.batch_size)
         # Initialize tracking variables
         total_wins = 0
