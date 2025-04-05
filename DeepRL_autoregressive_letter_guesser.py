@@ -97,14 +97,14 @@ class Actor:
             nn.Sequential(
                 # Input: game state + previous letter context (one-hot encoded)
                 # For position >0: [5x26] state + [pos*26] previous letters one-hot
-                nn.Linear(base_input_size + pos * 26, 128),
+                nn.Linear(base_input_size + pos * 26, 256),
                 nn.SiLU(),
-                nn.Linear(128, 128),
+                nn.Linear(256, 256),
                 nn.SiLU(),
-                nn.LayerNorm(128),
+                nn.LayerNorm(256),
                 nn.SiLU(),
                 # Output: probability distribution over 26 letters for this position
-                nn.Linear(128, 26)
+                nn.Linear(256, 26)
             ).to(device)
             for pos in range(self.env.word_length)
         ])
@@ -114,11 +114,11 @@ class Actor:
         self.critic = nn.ModuleList([
             nn.Sequential(
                 # Input: game state + previous letter context (like the actor)
-                nn.Linear(base_input_size + pos * 26, 128),
+                nn.Linear(base_input_size + pos * 26, 256),
                 nn.SiLU(),
-                nn.Linear(128, 128),
+                nn.Linear(256, 256),
                 nn.SiLU(),
-                nn.Linear(128, 1),
+                nn.Linear(256, 1),
             ).to(device)
             for pos in range(self.env.word_length)
         ])
@@ -167,6 +167,13 @@ class Actor:
             pickle.dump(self.stats, f)
 
         # Also save losses and rewards as CSV for easier analysis
+
+    def load_stats(self, path):
+        with open(path, 'rb') as f:
+            self.stats = pickle.load(f)
+        # Load the stats from the file
+
+
 
     def save_training_metrics(self, episode, actor_loss, critic_loss, win_rate, avg_reward,
                               pos_rewards=None, metrics_file='training_metrics'):
@@ -314,7 +321,7 @@ class Actor:
         # Initialize tracking variables
         total_wins = 0
         batch_losses_actor = []
-        batch_losses_critic = []
+        batch_losses_critic = [] 
         episode_rewards = []  # Track rewards for each episode
         position_rewards_tracking = [[] for _ in range(self.env.word_length)]  # Track rewards per position
 
@@ -822,10 +829,10 @@ class Actor:
 
 
 env = Environment("reduced_set.txt")
-A = Actor(env, batch_size=5000, epsilon=0.1, learning_rate=1e-6, actor_repetition=20, critic_repetition=4,
-          random_batch=False, sample_size=1000, display_progress_bar=True)
-# A.continue_training(model_path='GOOD2_actor_critic_end_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='GOOD2_actor_critic_stats_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=40000, print_freq=1000, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2,batch_size=1024,random_batch=True,sample_size=256)
-A.train(epochs=200000, print_freq=5000, display_progress_bar=False)
+A = Actor(env, batch_size=5000, epsilon=0.1, learning_rate=1e-5, actor_repetition=10, critic_repetition=2,
+          random_batch=True, sample_size=1000, display_progress_bar=False)
+A.continue_training(model_path='GOOD2_actor_critic_end_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='GOOD2_actor_critic_stats_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=500000, print_freq=5000,batch_size=5000,random_batch=True,sample_size=1000, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2)
+#A.train(epochs=500000, print_freq=5000, display_progress_bar=False)
 
 
 
