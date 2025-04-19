@@ -2,7 +2,7 @@ import pandas as pd
 import os
 
 
-def align_training_episodes(first_file, second_file, output_file=None):
+def align_training_episodes(first_file, second_file, output_file=None, episode_col=None):
     """
     Aligns the episode numbers of the second training run to continue from where the first run ended.
 
@@ -10,6 +10,7 @@ def align_training_episodes(first_file, second_file, output_file=None):
         first_file: Path to the first training run CSV file
         second_file: Path to the second training run CSV file
         output_file: Path to save the merged result (default uses hardcoded name)
+        episode_col: Name of the episode column (if None, uses first column)
     """
     # Add file extension if missing
     if not first_file.endswith('.csv'):
@@ -25,12 +26,28 @@ def align_training_episodes(first_file, second_file, output_file=None):
     print(f"First file columns: {df1.columns.tolist()}")
     print(f"Second file columns: {df2.columns.tolist()}")
 
-    # Get the name of the episode column (first column)
-    episode_col = df1.columns[0]
+    # Get the name of the episode column (first column if not specified)
+    if episode_col is None:
+        episode_col = df1.columns[0]
+        print(f"Using {episode_col} as the episode column")
 
-    # Ensure second file has the same column structure
+    # Ensure both files have the episode column
+    if episode_col not in df1.columns:
+        raise ValueError(f"Column '{episode_col}' not found in first file")
     if episode_col not in df2.columns:
         raise ValueError(f"Column '{episode_col}' not found in second file")
+    
+    # Check if column structures match
+    if len(df1.columns) != len(df2.columns):
+        print(f"Warning: Files have different number of columns ({len(df1.columns)} vs {len(df2.columns)})")
+    
+    # Verify columns match (except possibly the episode column)
+    non_episode_cols1 = [col for col in df1.columns if col != episode_col]
+    non_episode_cols2 = [col for col in df2.columns if col != episode_col]
+    if non_episode_cols1 != non_episode_cols2:
+        print("Warning: Column names differ between files (excluding episode column)")
+        print(f"First file: {non_episode_cols1}")
+        print(f"Second file: {non_episode_cols2}")
 
     # Find the maximum episode in first run
     max_episode = df1[episode_col].max()
@@ -39,7 +56,12 @@ def align_training_episodes(first_file, second_file, output_file=None):
     min_episode_second = df2[episode_col].min()
 
     # Calculate increment between episodes in second run
-    increment = df2[episode_col].iloc[1] - df2[episode_col].iloc[0] if len(df2) > 1 else 500
+    if len(df2) > 1:
+        increment = df2[episode_col].iloc[1] - df2[episode_col].iloc[0]
+    else:
+        # Default increment if second file has only one row
+        increment = 500
+        print(f"Warning: Second file has only one row. Using default increment of {increment}")
 
     # Adjust episode numbers in second run
     df2[episode_col] = df2[episode_col] - min_episode_second + max_episode + increment
@@ -49,7 +71,12 @@ def align_training_episodes(first_file, second_file, output_file=None):
 
     # Save to CSV
     if output_file is None:
-        output_file = 'aligned_training_metrics.csv'
+        output_file = f'aligned_{os.path.basename(first_file)}_and_{os.path.basename(second_file)}'
+    
+    # Ensure output has .csv extension
+    if not output_file.endswith('.csv'):
+        output_file += '.csv'
+    
     result.to_csv(output_file, index=False)
 
     print(f"Aligned and merged training data saved to {output_file}")
@@ -59,8 +86,16 @@ def align_training_episodes(first_file, second_file, output_file=None):
     return result
 
 
-# Call the function with file paths
-align_training_episodes(
-    'training_metrics_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.csv',
-    'Stats/training_metrics_Rv2_epo-80000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.csv'
-)
+if __name__ == "__main__":
+    # Call the function with file paths - update these paths as needed
+    align_training_episodes(
+        'training_metrics_20250404172508_ARLGv1-win_epo-200000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000',
+        'training_metrics_20250405150745_ARLGv1-win_epo-500000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000'
+    )
+    
+    # Alternatively, to specify a different episode column:
+    # align_training_episodes(
+    #     'first_file',
+    #     'second_file',
+    #     episode_col='Episode'
+    # )

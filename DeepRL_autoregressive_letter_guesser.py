@@ -316,7 +316,7 @@ class Actor:
 
         # Generate unique model ID based on hyperparameters
         self.model_id = create_model_id(epochs=epochs, actor_repetition=self.actor_repetition,
-                                        critic_repetition=self.critic_repetition, actor_network_size='1x128',
+                                        critic_repetition=self.critic_repetition, actor_network_size='1x256',
                                         learning_rate=self.learning_rate, batch_size=self.batch_size)
         # Initialize tracking variables
         total_wins = 0
@@ -570,7 +570,7 @@ class Actor:
             # Split the batch into games based on done flags
             # This ensures we maintain episode continuity when sampling
             # Get done indices on GPU
-            done_mask = (dones == 1).nonzero(as_tuple=True)[0] #TODO check if this is correct optimization
+            done_mask = (dones == 1).nonzero(as_tuple=True)[0]
             # Calculate game boundaries using tensor operations
             starts = torch.cat([torch.tensor([0], device=device), done_mask + 1])
             ends = torch.cat([done_mask, torch.tensor([len(dones) - 1], device=device)])
@@ -664,7 +664,7 @@ class Actor:
             # Update critic for this position
             for _ in range(self.critic_repetition):
                 self.optimizer_critic[position].zero_grad()
-                current_values = self.critic[position](inputs).squeeze(-1)  # Changed from .squeeze() to .squeeze(-1)
+                current_values = self.critic[position](inputs).squeeze(-1)
                 critic_loss = nn.MSELoss()(current_values, target_values.detach())
                 critic_loss.backward()
                 self.optimizer_critic[position].step()
@@ -829,10 +829,10 @@ class Actor:
 
 
 env = Environment("reduced_set.txt")
-A = Actor(env, batch_size=5000, epsilon=0.1, learning_rate=1e-5, actor_repetition=10, critic_repetition=2,
-          random_batch=True, sample_size=1000, display_progress_bar=False)
-A.continue_training(model_path='GOOD2_actor_critic_end_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='GOOD2_actor_critic_stats_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=500000, print_freq=5000,batch_size=5000,random_batch=True,sample_size=1000, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2)
-#A.train(epochs=500000, print_freq=5000, display_progress_bar=False)
+A = Actor(env, batch_size=1, epsilon=0.1, learning_rate=1e-5, actor_repetition=1, critic_repetition=1,
+          random_batch=False, sample_size=1, display_progress_bar=False)
+#A.continue_training(model_path='GOOD2_actor_critic_end_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='GOOD2_actor_critic_stats_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=500000, print_freq=5000,batch_size=5000,random_batch=True,sample_size=1000, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2)
+A.train(epochs=5, print_freq=5, display_progress_bar=False)
 
 
 
