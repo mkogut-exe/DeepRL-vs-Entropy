@@ -24,7 +24,9 @@ The training process involves generating words, calculating rewards based on let
 torch_version = torch.__version__
 cuda_available = torch.cuda.is_available()
 device = torch.device('cuda' if cuda_available else 'cpu')
-print(f'Torch version: {torch_version}, CUDA availability: {cuda_available}, Device: {device}')
+print(f'Torch version: {torch_version}, CUDA availability: {cuda_available}, Device: {device}, CUDA_VISIBLE_DEVICE:{os.environ.get("CUDA_VISIBLE_DEVICES")}')
+print("Current GPU:", torch.cuda.current_device())
+print("GPU Name:", torch.cuda.get_device_name(0))
 
 # Set random seed for reproducibility
 seed = 1
@@ -500,7 +502,7 @@ class Actor:
                 avg_loss_actor = np.mean(batch_losses_actor) if batch_losses_actor else 0
                 avg_loss_critic = np.mean(batch_losses_critic) if batch_losses_critic else 0
                 win_rate = total_wins / print_freq
-                avg_reward = np.mean(episode_rewards) if episode_rewards else 0
+                avg_reward = np.mean(episode_rewards)/self.env.word_length if episode_rewards else 0
 
                 # Save average losses to stats
                 self.stats['avg_actor_losses'].append(avg_loss_actor)

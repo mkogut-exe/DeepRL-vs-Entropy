@@ -27,6 +27,7 @@ device = torch.device('cuda' if cuda_available else 'cpu')
 print(f'Torch version: {torch_version}, CUDA availability: {cuda_available}, Device: {device}, CUDA_VISIBLE_DEVICE:{os.environ.get("CUDA_VISIBLE_DEVICES")}')
 print("Current GPU:", torch.cuda.current_device())
 print("GPU Name:", torch.cuda.get_device_name(0))
+
 # Set random seed for reproducibility
 seed = 1
 torch.manual_seed(seed)
@@ -34,9 +35,9 @@ np.random.seed(seed)
 random.seed(seed)
 
 
-def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size, learning_rate, batch_size,decay):
+def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size, learning_rate, batch_size):
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    return f"_{timestamp}_ARLGv1-wd-win_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}-Dec--{decay}"
+    return f"_{timestamp}_ARLGv1-win_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
     # - ARLGv1: Letter Guesser version 5
     # - +/-win: Model trained with(+)/without(-) win reward system
     # - epo: Number of training epochs
@@ -57,7 +58,7 @@ class Actor:
 
     def __init__(self, env: Environment, batch_size=256, discount=0.99, epsilon=0.1, learning_rate=1e-4,
                  actor_repetition=15, critic_repetition=5, prune=False, prune_amount=0.1, prune_freq=1000,
-                 sparsity_threshold=0.1, random_batch=False, sample_size=256, weight_decay= 1e-4,display_progress_bar=False):
+                 sparsity_threshold=0.1, random_batch=False, sample_size=256, display_progress_bar=False):
         # A-C parameters
         self.env = env  # Store environment
         self.discount = discount  # Discount factor for TD learning
@@ -65,7 +66,6 @@ class Actor:
         self.critic_repetition = critic_repetition  # Number of times to update the critic network
         self.epsilon = epsilon  # Epsilon for PPO clipping
         self.model_id = ''  # Model ID for saving and loading
-        self.weight_decay=weight_decay
 
         # PRUNE (not implemented yet)
         self.sparsity_threshold = sparsity_threshold  # not implemented yet
@@ -127,12 +127,12 @@ class Actor:
 
         # Create separate optimizers for each actor and critic
         self.optimizer_actor = [
-            optim.Adam(network.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+            optim.Adam(network.parameters(), lr=self.learning_rate)
             for network in self.actor
         ]
 
         self.optimizer_critic = [
-            optim.Adam(network.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+            optim.Adam(network.parameters(), lr=self.learning_rate)
             for network in self.critic
         ]
 
@@ -319,8 +319,7 @@ class Actor:
         # Generate unique model ID based on hyperparameters
         self.model_id = create_model_id(epochs=epochs, actor_repetition=self.actor_repetition,
                                         critic_repetition=self.critic_repetition, actor_network_size='1x256',
-                                        learning_rate=self.learning_rate, batch_size=self.batch_size,
-                                        decay=self.weight_decay)
+                                        learning_rate=self.learning_rate, batch_size=self.batch_size)
         # Initialize tracking variables
         total_wins = 0
         batch_losses_actor = []
@@ -360,85 +359,14 @@ class Actor:
                 """
                 # Calculate position-specific rewards
                 pos_rewards_for_transition = [0.0] * self.env.word_length
-
-                # Track letter status changes
-                current_position_status = [0] * self.env.word_length
-                newly_correct = [False] * self.env.word_length
-                newly_in_word = [False] * self.env.word_length
-
-                for i, match in enumerate(matches):
-                    current_position_status[i] = match
-                    newly_correct[i] = (match == 2 and last_position_status[i] != 2)
-                    newly_in_word[i] = (match == 1 and last_position_status[i] == 0)
-
+                solved_bonus=0
                 # Global rewards
-                solved_bonus = 10.0 if self.env.win else 0.0
-                new_eliminations = 0.3  # Simplified since newly_eliminated_letters() isn't implemented
-                progress_bonus = sum(current_position_status) / self.env.word_length  # Overall progress
+                if self.env.end:
+                    solved_bonus = 1.0 if self.env.win else -1.0
 
                 # Position-specific rewards
                 for i in range(self.env.word_length):
-                    # Base improvement rewards
-                    if newly_correct[i]:
-                        pos_rewards_for_transition[i] += 3.0  # Max reward for correct placement
-                    elif newly_in_word[i]:
-                        pos_rewards_for_transition[i] += 1.2  # Bonus for finding new yellow
-
-                    # Maintenance rewards
-                    if current_position_status[i] == 2:
-                        pos_rewards_for_transition[i] += 0.3  # Reward for keeping correct letters
-                    elif current_position_status[i] == 1:
-                        pos_rewards_for_transition[i] += 0.1  # Small reward for maintaining yellow
-
-                    # Add global components
-                    pos_rewards_for_transition[i] += (
-                            solved_bonus +
-                            new_eliminations +
-                            progress_bonus
-                    )
-
-                    # Precision penalty - simplified implementation
-                    if current_position_status[i] == 1:
-                        # Check if the same letter appears as correct (2) elsewhere
-                        letter = word[i]
-                        for j in range(self.env.word_length):
-                            if i != j and word[j] == letter and current_position_status[j] == 2:
-                                pos_rewards_for_transition[i] -= 0.4
-                                break
-
-                # Negative rewards for regressions
-                for i in range(self.env.word_length):
-                    if current_position_status[i] < last_position_status[i]:
-                        pos_rewards_for_transition[i] -= 0.8 * (last_position_status[i] - current_position_status[i])
-
-                # only position rewards
-                """# Calculate position-specific rewards
-                pos_rewards_for_transition = [0.0] * self.env.word_length
-
-                # Parse the match pattern to determine letter status
-                current_position_status = [0] * self.env.word_length
-                for i, match in enumerate(matches):
-                    if match == 2:  # Correct position
-                        current_position_status[i] = 2
-                    elif match == 1:  # In word but wrong position
-                        current_position_status[i] = 1
-
-                # Calculate improvement for each position
-                for i in range(self.env.word_length):
-                    # Position-specific reward based on improvement
-                    if current_position_status[i] > last_position_status[i]:
-                        # Higher reward for correct position than just being in word
-                        if current_position_status[i] == 2:  # Correct position
-                            pos_rewards_for_transition[i] = 2.0
-                        else:  # In word
-                            pos_rewards_for_transition[i] = 1.0
-
-                    # Small penalty for regression (unlikely but possible)
-                    elif current_position_status[i] < last_position_status[i]:
-                        pos_rewards_for_transition[i] = -0.5"""
-
-                # Update last status for next round
-                last_position_status = current_position_status
+                    pos_rewards_for_transition[i] += solved_bonus
 
                 # Calculate global reward (sum of position rewards)
                 reward = sum(pos_rewards_for_transition)
@@ -832,10 +760,11 @@ class Actor:
 
 
 env = Environment("reduced_set.txt")
-A = Actor(env, batch_size=5000, epsilon=0.1, learning_rate=1e-5, actor_repetition=10, critic_repetition=2,
-          random_batch=False, sample_size=1000,weight_decay=5e-3, display_progress_bar=False)
+A = Actor(env, batch_size=10, epsilon=0.1, learning_rate=1e-5, actor_repetition=1, critic_repetition=1,
+          random_batch=False, sample_size=10, display_progress_bar=False)
 #A.continue_training(model_path='GOOD2_actor_critic_end_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='GOOD2_actor_critic_stats_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=500000, print_freq=5000,batch_size=5000,random_batch=True,sample_size=1000, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2)
-A.train(epochs=500000, print_freq=5000, display_progress_bar=False)
+A.train(epochs=500, print_freq=50, display_progress_bar=False)
+
 
 
 
