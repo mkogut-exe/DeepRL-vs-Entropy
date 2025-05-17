@@ -2,7 +2,7 @@ import pickle
 import numpy as np
 
 
-def summarize_wordle_stats(file_path='wordle_stats_600.pkl'):
+def summarize_wordle_stats(file_path=r'D:\DGitHub\DeepRL-vs-Entropy\Stats\Runs_before_13_03\wordle_stats_first_run.pkl'):
     with open(file_path, 'rb') as f:
         stats = pickle.load(f)
 

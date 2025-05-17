@@ -8,6 +8,7 @@ from tqdm import tqdm
 import pickle
 import os
 import csv
+import datetime
 """
 Wordle agent using deep reinforcement learning with input of word vector representation of the all matching words and outputs guessed word.
 
@@ -34,8 +35,17 @@ random.seed(seed)
 
 
 
-def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size,learning_rate,batch_size):
-    return f"_WV_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
+def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size, learning_rate, batch_size):
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    return f"_FINAL_{timestamp}_WVec-win_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
+    # - ARLGv1: Letter Guesser version 5
+    # - +/-win: Model trained with(+)/without(-) win reward system
+    # - epo: Number of training epochs
+    # - AR: Actor network update repetitions
+    # - CR: Critic network update repetitions
+    # - AS: Actor network architecture size
+    # - Lr: Learning rate
+    # - Bs: Batch size
 
 
 
@@ -70,7 +80,7 @@ class Actor:
             nn.SiLU(),
             nn.LayerNorm(256),
             nn.Linear(256,self.allowed_words_length ),
-        nn.Softmax(dim=-1)
+            nn.Softmax(dim=-1)
         ).to(device)
 
         # Critic network
@@ -312,7 +322,7 @@ class Actor:
         return np.mean(actor_losses), np.mean(critic_losses)
 
     def train(self, epochs=500, print_freq=50, autosave=False, append_metrics=False, prune_amount=0.1, prune_freq=1000,
-              sparsity_threshold=0.1, prune=False):
+              sparsity_threshold=0.1, prune=False, display_progress_bar=False):
         print("Training...")
         self.prune_amount = prune_amount
         self.prune_freq = prune_freq
@@ -334,7 +344,7 @@ class Actor:
             if not append_metrics:
                 writer.writerow(['Episode', 'Actor_Loss', 'Critic_Loss', 'Win_Rate'])
 
-        for episode in tqdm(range(epochs)):
+        for episode in (tqdm(range(epochs)) if display_progress_bar else range(epochs)):
             self.env.reset()
             state = self.state()
             last_correct = 0
@@ -625,6 +635,6 @@ class Actor:
 
 
 
-env = Environment('thiny_set.txt')
-A = Actor(env,batch_size=100, epsilon=0.1, learning_rate=1e-3, actor_repetition=10, critic_repetition=2,random_batch=True)
-A.train(epochs=10000, print_freq=500,prune=False)
+env = Environment('wordle-nyt-allowed-guesses-update-12546')
+A = Actor(env,batch_size=5000, epsilon=0.1, learning_rate=1e-5, actor_repetition=10, critic_repetition=2,random_batch=True,sample_size=1000)
+A.train(epochs=200000, print_freq=5000,prune=False, display_progress_bar=False)

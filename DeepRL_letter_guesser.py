@@ -30,7 +30,7 @@ random.seed(seed)
 
 def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size, learning_rate, batch_size):
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    return f"_{timestamp}_LGv5_-win_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
+    return f"_FINAL_{timestamp}_LGv5_-win_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
     # - LGv5: Letter Guesser version 5
     # - +/-win: Model trained with(+)/without(-) win reward system
     # - epo: Number of training epochs
@@ -325,7 +325,7 @@ class Actor:
         return np.mean(actor_losses), np.mean(critic_losses)
 
     def train(self, epochs=500, print_freq=50, autosave=False, append_metrics=False, prune_amount=0.1, prune_freq=1000,
-              sparsity_threshold=0.1, prune=False):
+              sparsity_threshold=0.1, prune=False, display_progress_bar=False):
         """
         Train the actor-critic agent on Wordle games.
 
@@ -364,7 +364,7 @@ class Actor:
             if not append_metrics:
                 writer.writerow(['Episode', 'Actor_Loss', 'Critic_Loss', 'Win_Rate', 'Reward'])
 
-        for episode in tqdm(range(epochs)):
+        for episode in (tqdm(range(epochs)) if display_progress_bar else range(epochs)):
             self.env.reset()
             state = self.state()
             last_correct = 0
@@ -550,8 +550,8 @@ class Actor:
         return avg_tries, win_rate
 
 
-env = Environment("reduced_set.txt")
-A = Actor(env, batch_size=1024, epsilon=0.1, learning_rate=1e-5, actor_repetition=10, critic_repetition=2,
-          random_batch=True, sample_size=256)
+env = Environment('wordle-nyt-allowed-guesses-update-12546')
+A = Actor(env, batch_size=5000, epsilon=0.1, learning_rate=1e-5, actor_repetition=10, critic_repetition=2,
+          random_batch=True, sample_size=1000)
 # A.continue_training(model_path='GOOD2_actor_critic_end_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='GOOD2_actor_critic_stats_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=40000, print_freq=1000, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2,batch_size=1024,random_batch=True,sample_size=256)
-A.train(epochs=40000, print_freq=1000, prune=False)
+A.train(epochs=200000, print_freq=5000, prune=False, display_progress_bar=False)

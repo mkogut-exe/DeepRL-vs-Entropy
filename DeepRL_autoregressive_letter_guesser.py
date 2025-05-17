@@ -37,7 +37,7 @@ random.seed(seed)
 
 def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size, learning_rate, batch_size):
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    return f"_{timestamp}_ARLGv1-win_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
+    return f"_FINAL_{timestamp}_ARLGv1-win_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
     # - ARLGv1: Letter Guesser version 5
     # - +/-win: Model trained with(+)/without(-) win reward system
     # - epo: Number of training epochs
@@ -830,11 +830,11 @@ class Actor:
         return avg_tries, win_rate
 
 
-env = Environment("reduced_set.txt")
-A = Actor(env, batch_size=1, epsilon=0.1, learning_rate=1e-5, actor_repetition=1, critic_repetition=1,
-          random_batch=False, sample_size=1, display_progress_bar=False)
+env = Environment('wordle-nyt-allowed-guesses-update-12546')
+A = Actor(env, batch_size=5000, epsilon=0.1, learning_rate=1e-5, actor_repetition=10, critic_repetition=2,
+          random_batch=True, sample_size=1000, display_progress_bar=False)
 #A.continue_training(model_path='GOOD2_actor_critic_end_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pt', stats_path='GOOD2_actor_critic_stats_Rv2_epo-40000_AR-10_CR-2_AS-8x256-Lr-1e-05-Bs-1024.pkl', epochs=500000, print_freq=5000,batch_size=5000,random_batch=True,sample_size=1000, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2)
-A.train(epochs=5, print_freq=5, display_progress_bar=False)
+A.train(epochs=200000, print_freq=5000, prune=False, display_progress_bar=False)
 
 
 

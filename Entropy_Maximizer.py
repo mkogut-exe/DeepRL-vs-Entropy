@@ -267,3 +267,4 @@ def process_word_parallel(args):
     return word, win, tries
 
 em=Entropy_maximizer(Environment('wordle-nyt-allowed-guesses-update-12546.txt'), silent=False)
+em.play_max_entropy()
