@@ -30,7 +30,7 @@ random.seed(seed)
 
 def create_model_id(epochs, actor_repetition, critic_repetition, actor_network_size, learning_rate, batch_size):
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    return f"_FINAL_{timestamp}_LGv5_-win_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
+    return f"_FINAL_{timestamp}_non-ARLG-IR_-win_epo-{epochs}_AR-{actor_repetition}_CR-{critic_repetition}_AS-{actor_network_size}-Lr-{learning_rate}-Bs-{batch_size}"
     # - LGv5: Letter Guesser version 5
     # - +/-win: Model trained with(+)/without(-) win reward system
     # - epo: Number of training epochs
