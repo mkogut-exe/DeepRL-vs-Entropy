@@ -635,6 +635,6 @@ class Actor:
 
 
 
-env = Environment('wordle-nyt-allowed-guesses-update-12546')
+env = Environment('wordle-nyt-allowed-guesses-update-12546.txt')
 A = Actor(env,batch_size=5000, epsilon=0.1, learning_rate=1e-5, actor_repetition=10, critic_repetition=2,random_batch=True,sample_size=1000)
 A.train(epochs=200000, print_freq=5000,prune=False, display_progress_bar=False)
