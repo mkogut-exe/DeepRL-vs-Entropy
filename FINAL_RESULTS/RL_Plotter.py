@@ -32,7 +32,7 @@ def plot_training_metrics(file_path='training_metrics.csv'):
 
     # Set y-axis limits for actor loss (ignore outliers)
     q80_actor = df['Actor_Loss'].quantile(0.80)
-    ax1.set_ylim(-4,0.3)#q80_actor * 1.6)
+    ax1.set_ylim(-0.07, 0.01)
 
     # Plot critic loss
     ax2.plot(df['Episode'], df['Critic_Loss'], 'r-', alpha=0.3)
@@ -51,13 +51,17 @@ def plot_training_metrics(file_path='training_metrics.csv'):
     ax3.set_ylabel('Win Rate')
     ax3.grid(True)
 
+
     # Add baseline for random guessing
-    ax3.axhline(y=0.81, color='gray', linestyle='--', alpha=0.7, label='Random Baseline')
+    # all 0.4229
+    ax3.axhline(y=0.4229, color='gray', linestyle='--', alpha=0.7, label='Random Baseline')
     ax3.legend()
 
-    # Set y-axis limits for win rate
-    win_max = max(0.3, df['Win_Rate'].max() * 1.05)
-    ax3.set_ylim(0.7, win_max)
+    # Adjust y-axis limits to ensure data is visible
+    win_min = max(0, df['Win_Rate'].min() * 0.95)  # Lower bound with 5% margin
+    win_max = min(1, df['Win_Rate'].max() * 1.05)  # Upper bound with 5% margin
+    ax3.set_ylim(win_min, win_max)
+
     
     # Plot rewards
     ax4.plot(df['Episode'], df['Reward'], 'purple', alpha=0.3)
@@ -81,4 +85,4 @@ def plot_training_metrics(file_path='training_metrics.csv'):
 
 
 if __name__ == "__main__":
-    plot_training_metrics(file_path='training_metrics_20250420230007_ARLGv1-wd-win_epo-500000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000-Dec--1e-05csv')
+    plot_training_metrics(file_path='training_metrics_FINAL_20250522185037_ARLG-WR-win_only_epo-400000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000.csv')
