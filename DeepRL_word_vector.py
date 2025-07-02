@@ -96,6 +96,7 @@ class Actor:
             nn.Linear(self.allowed_words_length, 256),
             nn.SiLU(),
             nn.Linear(256, 256),
+            nn.SiLU(),
             nn.Linear(256, 256),
             nn.SiLU(),
             nn.Linear(256, 256),
