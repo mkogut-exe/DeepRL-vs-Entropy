@@ -158,6 +158,105 @@ class Actor:
             state_vector[indices_tensor] = 1.0
         return state_vector
 
+
+    def one_update(self, state, reward, next_state, old_action_prob,game_over):#update the actor and critic networks with Proximal Policy Optimization using TD(0)
+
+        #############################################Critic update#############################################
+
+        # Reset gradients before critic update
+        self.optimizer_critic.zero_grad()
+
+        critic_value = self.critic(state)#feed the current state to the critic network to get the value
+        next_critic_value = self.critic(next_state).detach()#feed the next state to the critic network to get the value (but don't compute the gradient)
+        target_value = reward + self.discount * next_critic_value * (1 - game_over)#compute the target value (1-game_over is 0 if the game is over and 1 otherwise)
+        td_error = (target_value - critic_value).detach()  # Calculate TD error for actor
+
+        loss_critic = nn.MSELoss()(critic_value, target_value)#compute the Mean Squered Error loss for the critic
+
+        # Compute the gradients
+        loss_critic.backward(retain_graph=True)
+
+        # Update the parameters
+        self.optimizer_critic.step()
+
+
+        #############################################Actor update#############################################
+
+        # Reset gradients before actor update
+        self.optimizer_actor.zero_grad()
+
+        action_prob = self.actor(state)#feed the current state to the actor network to get the action probabilities
+        action_prob = action_prob*state#mask the action probabilities to filter out not matching options
+        action_prob = action_prob/torch.sum(action_prob)#normalize the action probabilities
+        importance_sampling = action_prob/(old_action_prob + 1e-10)#compute importance sampling ratio
+        loss_actor = torch.min(td_error*importance_sampling, td_error*torch.clamp(importance_sampling, 1-self.epsilon, 1+self.epsilon))#compute the loss for the actor
+        loss_actor = -torch.mean(loss_actor)#compute the mean loss ('-' because we want to maximize the reward)
+
+        # Compute gradients
+        loss_actor.backward()
+
+        # Update parameters
+        self.optimizer_actor.step()
+
+
+        action = torch.argmax(action_prob).item() #pick action with max probability
+
+        return action, action_prob, critic_value, loss_actor.item(), loss_critic.item()
+
+    def many_update(self, state, reward, next_state, old_action_prob, game_over):
+        #############################################Critic update#############################################
+        # Store initial critic value for TD error
+        with torch.no_grad():
+            initial_critic_value = self.critic(state)
+            next_critic_value = self.critic(next_state)
+            target_value = reward + self.discount * next_critic_value * (1 - game_over)
+            td_error = (target_value - initial_critic_value)
+
+        # Perform critic updates
+        for _ in range(self.critic_repetition):
+            self.optimizer_critic.zero_grad()
+            critic_value = self.critic(state)
+            loss_critic = nn.MSELoss()(critic_value, target_value)
+            loss_critic.backward(retain_graph=True)
+            self.optimizer_critic.step()
+
+        with torch.no_grad():
+            initial_critic_value = self.critic(state)
+            next_critic_value = self.critic(next_state)
+            target_value = reward + self.discount * next_critic_value * (1 - game_over)
+            td_error = (target_value - initial_critic_value)
+
+        #############################################Actor update#############################################
+        # Store initial probabilities
+        with torch.no_grad():
+            initial_action_prob = self.actor(state)
+            initial_action_prob = initial_action_prob * state
+            initial_action_prob = initial_action_prob / torch.sum(initial_action_prob)
+
+        # Perform actor updates
+        for _ in range(self.actor_repetition):
+            self.optimizer_actor.zero_grad()
+            action_prob = self.actor(state)
+            action_prob = action_prob * state
+            action_prob = action_prob / torch.sum(action_prob)
+            importance_sampling = action_prob / (old_action_prob + 1e-10)
+            loss_actor = torch.min(
+                td_error * importance_sampling,
+                td_error * torch.clamp(importance_sampling, 1 - self.epsilon, 1 + self.epsilon)
+            )
+            loss_actor = -torch.mean(loss_actor)
+            loss_actor.backward(retain_graph=True)
+            self.optimizer_actor.step()
+
+        # Get final action
+        with torch.no_grad():
+            final_action_prob = self.actor(state)
+            final_action_prob = final_action_prob * state
+            final_action_prob = final_action_prob / torch.sum(final_action_prob)
+            action = torch.argmax(final_action_prob).item()
+
+        return action, final_action_prob, critic_value, loss_actor.item(), loss_critic.item()
+
     def batch_update(self, states, actions, rewards, next_states, old_action_probs_selected, dones):
         states = torch.stack(states)
         actions = torch.tensor(actions, device=device, dtype=torch.long)
