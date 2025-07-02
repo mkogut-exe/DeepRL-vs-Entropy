@@ -30,9 +30,10 @@ def plot_training_metrics(file_path='training_metrics.csv'):
     ax1.legend()
     ax1.grid(True)
 
-    # Set y-axis limits for actor loss (ignore outliers)
-    q80_actor = df['Actor_Loss'].quantile(0.80)
-    ax1.set_ylim(-0.07, 0.01)
+    # Set y-axis limits for actor loss to always include min and max values with 10% margin
+    actor_min = df['Actor_Loss'].min() - abs(df['Actor_Loss'].min()) * 0.10 -0.015
+    actor_max = df['Actor_Loss'].max() + abs(df['Actor_Loss'].max()) * 0.10 +0.015
+    ax1.set_ylim(actor_min, actor_max)
 
     # Plot critic loss
     ax2.plot(df['Episode'], df['Critic_Loss'], 'r-', alpha=0.3)
@@ -41,9 +42,10 @@ def plot_training_metrics(file_path='training_metrics.csv'):
     ax2.legend()
     ax2.grid(True)
 
-    # Set y-axis limits for critic loss (ignore outliers)
-    q80_critic = df['Critic_Loss'].quantile(0.80)
-    ax2.set_ylim(0, q80_critic * 1.4)
+    # Set y-axis limits for actor loss to always include min and max values with 10% margin
+    actor_min = df['Critic_Loss'].min() - abs(df['Actor_Loss'].min()) * 0.10 -0.015
+    actor_max = df['Critic_Loss'].max() + abs(df['Actor_Loss'].max()) * 0.10 +0.015
+    ax2.set_ylim(actor_min, actor_max)
 
     # Plot win rate
     ax3.plot(df['Episode'], df['Win_Rate'], 'g-', alpha=0.3)
@@ -58,7 +60,7 @@ def plot_training_metrics(file_path='training_metrics.csv'):
     ax3.legend()
 
     # Adjust y-axis limits to ensure data is visible
-    win_min = max(0, df['Win_Rate'].min() * 0.95)  # Lower bound with 5% margin
+    win_min = max(0, df['Win_Rate'].min() * 0.95)   # Lower bound with 5% margin
     win_max = min(1, df['Win_Rate'].max() * 1.05)  # Upper bound with 5% margin
     ax3.set_ylim(win_min, win_max)
 
