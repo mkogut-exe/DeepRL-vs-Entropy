@@ -87,4 +87,4 @@ def plot_training_metrics(file_path='training_metrics.csv'):
 
 
 if __name__ == "__main__":
-    plot_training_metrics(file_path='training_metrics_FINAL_20250522185037_ARLG-WR-win_only_epo-400000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000.csv')
+    plot_training_metrics(file_path='aligned_training_metrics_FINAL_20250518223616_ARLG-IR-win_epo-win_epo-400000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000.csv')

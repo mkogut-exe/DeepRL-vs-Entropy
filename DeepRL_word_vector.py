@@ -236,7 +236,7 @@ class Actor:
         # Return the mean losses
         return np.mean(actor_losses), np.mean(critic_losses)
 
-    def train(self, epochs=500, print_freq=50, autosave=False, append_metrics=False, prune_amount=0.1, prune_freq=1000,
+    def train_IR(self, epochs=500, print_freq=50, autosave=False, append_metrics=False, prune_amount=0.1, prune_freq=1000,
               sparsity_threshold=0.1, prune=False, display_progress_bar=False):
         print("Training...")
         self.prune_amount = prune_amount
@@ -357,6 +357,107 @@ class Actor:
                     self.save_model(f'actor_critic_{episode + 1}{self.model_id}.pt')
                 self.save_stats(f'actor_critic_stats{self.model_id}.pkl')
 
+        def train_WR(self, epochs=500, print_freq=50, autosave=False, append_metrics=False, prune_amount=0.1,
+                     prune_freq=1000,
+                     sparsity_threshold=0.1, prune=False, display_progress_bar=False):
+            print("Training...")
+            self.prune_amount = prune_amount
+            self.prune_freq = prune_freq
+            self.sparsity_threshold = sparsity_threshold
+            self.prune = prune
+            self.model_id = create_model_id(epochs=epochs, actor_repetition=self.actor_repetition,
+                                            critic_repetition=self.critic_repetition, actor_network_size='1x256',
+                                            learning_rate=self.learning_rate, batch_size=self.batch_size)
+            total_wins = 0
+            batch_losses_actor = []
+            batch_losses_critic = []
+
+            # Initialize replay buffer
+            replay_buffer = []
+
+            # Create or append to metrics file
+            with open(f'training_metrics{self.model_id}.csv', 'a' if append_metrics else 'w', newline='') as f:
+                writer = csv.writer(f)
+                if not append_metrics:
+                    writer.writerow(['Episode', 'Actor_Loss', 'Critic_Loss', 'Win_Rate'])
+
+            for episode in (tqdm(range(epochs)) if display_progress_bar else range(epochs)):
+                self.env.reset()
+                state = self.state()
+                last_correct = 0
+                last_in_word = 0
+
+                for round in range(self.env.max_tries):
+                    action, old_prob = self.act()
+                    matches = self.env.guess(self.env.allowed_words[action])
+                    next_state = self.state()
+                    done = self.env.end
+
+                    if self.env.win:
+                        reward = 1.0
+                    else:
+                        reward = -1.0
+
+                    last_correct = correct_position
+                    last_in_word = in_word
+
+                    # Add transition to replay buffer
+                    replay_buffer.append((state, action, reward, next_state, old_prob, done))
+
+                    # Process in batches when buffer reaches batch size
+                    if len(replay_buffer) >= self.batch_size:
+                        batch = replay_buffer[:self.batch_size]
+                        replay_buffer = replay_buffer[self.batch_size:]
+
+                        states, actions, rewards, next_states, old_probs, dones = zip(*batch)
+                        loss_actor, loss_critic = self.batch_update(states, actions, rewards, next_states, old_probs,
+                                                                    dones)
+
+                        batch_losses_actor.append(loss_actor)
+                        batch_losses_critic.append(loss_critic)
+
+                    if done:
+                        break
+
+                    state = next_state.clone()
+
+                # Update stats
+                total_wins += self.env.win
+                self.stats['wins'] += self.env.win
+                self.stats['total_games'] += 1
+                self.stats['tries_distribution'][self.env.try_count] += 1
+                self.stats['results'][self.env.word] = {'tries': self.env.try_count, 'win': self.env.win}
+
+                # Process remaining samples if enough have accumulated
+                if len(replay_buffer) >= min(1024, self.batch_size):  # Use smaller mini-batches for leftover data
+                    mini_batch_size = min(1024, len(replay_buffer))
+                    batch = replay_buffer[:mini_batch_size]
+                    replay_buffer = replay_buffer[mini_batch_size:]
+
+                    states, actions, rewards, next_states, old_probs, dones = zip(*batch)
+                    loss_actor, loss_critic = self.batch_update(states, actions, rewards, next_states, old_probs, dones)
+
+                    batch_losses_actor.append(loss_actor)
+                    batch_losses_critic.append(loss_critic)
+
+                # Print stats and save metrics
+                if (episode + 1) % print_freq == 0:
+                    avg_loss_actor = np.mean(batch_losses_actor) if batch_losses_actor else 0
+                    avg_loss_critic = np.mean(batch_losses_critic) if batch_losses_critic else 0
+                    win_rate = total_wins / print_freq
+
+                    self.save_training_metrics(episode + 1, avg_loss_actor, avg_loss_critic, win_rate)
+
+                    print(f"Episode {episode + 1}/{epochs} - Actor Loss: {avg_loss_actor:.4f}, "
+                          f"Critic Loss: {avg_loss_critic:.4f}, Win Rate: {win_rate:.4f}")
+
+                    total_wins = 0
+                    batch_losses_actor = []
+                    batch_losses_critic = []
+
+                    if autosave:
+                        self.save_model(f'actor_critic_{episode + 1}{self.model_id}.pt')
+                    self.save_stats(f'actor_critic_stats{self.model_id}.pkl')
         # Process any remaining samples in the buffer at the end
         while len(replay_buffer) >= 32:  # Process remaining data in small batches
             mini_batch_size = min(1024, len(replay_buffer))
@@ -385,134 +486,6 @@ class Actor:
 
             # Return action and the scalar probability of that action
             return action, action_prob[action].item()
-
-    def many_rewards_train(self, epochs=500, print_freq=50):
-        print("Training...")
-        total_wins=0
-        wins_in_period=0
-        step=0
-        for epoch in tqdm(range(epochs)):
-            step = 1  # Reset step counter for each episode
-            self.env.reset(word_test=None)
-
-
-            total_reward = torch.zeros(1, device=device)
-            actions = []
-
-            current_value = torch.zeros(1, device=device)
-            state = self.state()
-
-
-            while not self.env.end:
-
-                old_action, old_action_prob = self.act()
-                immediate_reward = torch.zeros(1, device=device)
-                if old_action in actions:
-                    immediate_reward -= 1
-
-                if epoch > print_freq and epoch % print_freq == 1:
-                    print(f"\nAction: {self.env.allowed_words[old_action]}, Action prob: {old_action_prob[old_action]:.6f}")
-
-                self.env.guess(self.env.allowed_words[old_action])
-
-
-                if self.env.win:
-                    immediate_reward = torch.tensor([1.0 - (0.1/step)], device=device)
-                else:
-                    # Reward for correct letters in position
-                    immediate_reward = torch.tensor([
-                        0.1 * self.env.correct_position +
-                        0.05 * self.env.in_word -
-                        0.1 * step  # Penalty for each step
-                    ], device=device)
-
-                total_reward += immediate_reward
-                actions.append(old_action)
-                next_state = self.state()
-
-                action, action_prob, critic_value, loss_actor, loss_critic = self.many_update(
-                    state,
-                    immediate_reward,
-                    next_state,
-                    old_action_prob,
-                    game_over=self.env.end
-                )
-
-                state = next_state
-                step += 1
-
-            wins_in_period += self.env.win
-            total_wins += self.env.win
-
-            if epoch > print_freq and epoch % print_freq == 1:
-                self.save_model(f'actor_critic_{epoch}.pt')
-                print(f'\nWord being guessed: {self.env.word}, Win: {self.env.win}, '
-                      f'Total reward: {total_reward.item():.4f}, '
-                      f'Critic value: {critic_value.item():.4f}, '
-                      f'Total wins: {total_wins}, '
-                      f'Win rate in period: {wins_in_period/print_freq:.4f}')
-                print(f"{epoch}/{epochs} - Loss actor: {loss_actor:.4f}, Loss critic: {loss_critic:.4f}")
-                wins_in_period = 0
-        print("Training finished.Average win rate: ", total_wins / epochs)
-        self.save_model(f'actor_critic_end.pt')
-    def few_rewards_train(self, epochs=500, print_freq=50):
-        print("Training...")
-        total_wins=0
-        wins_in_period=0
-        for epoch in tqdm(range(epochs)):
-            self.env.reset(word_test=None)
-            state = self.state()
-
-            total_reward = 0
-            actions = []
-            critic_reward=0
-            while not self.env.end:
-
-                old_action, old_action_prob = self.act()
-
-
-                if epoch > print_freq:
-                    if epoch % print_freq == 1:
-
-                        print(
-                            f"\nAction: {self.env.allowed_words[old_action]}, Action prob: {old_action_prob[old_action]:.6f}")
-
-
-
-
-
-                self.env.guess(self.env.allowed_words[old_action])
-
-                if self.env.win:
-                    immediate_reward = 1.0  # Reward for winning
-                else:
-                    immediate_reward = -0.1  # Penalty per step
-
-                if old_action in actions:
-                    immediate_reward  -= 1
-
-                actions.append(old_action)
-
-
-                next_state = self.state()
-                action, action_prob, critic_reward, loss_actor, loss_critic = self.many_update(state, immediate_reward , next_state,
-                                                                                   old_action_prob,
-                                                                                   game_over=self.env.end)
-                state = next_state
-
-            wins_in_period += self.env.win
-            total_wins += self.env.win
-
-
-            if epoch > print_freq:
-
-                if epoch % print_freq == 1:
-                    self.save_model(f'actor_critic_{epoch}.pt')
-                    print(f'\nWord beeing guessed: {self.env.word}, Win: {self.env.win}, Total reward: {total_reward:.4f}, Critic reward: {critic_reward[0]:}, Total wins: {total_wins}, win rate in period: {wins_in_period/print_freq:.4f}')
-                    print(f"{epoch}/{epochs} - Loss actor: {loss_actor:.4f}, Loss critic: {loss_critic:.4f}")
-                    wins_in_period = 0
-        print("Training finished.Average win rate: ", total_wins/epochs)
-        self.save_model(f'actor_critic_end.pt')
 
     def run(self,state):
         action = 0
@@ -552,4 +525,4 @@ class Actor:
 
 env = Environment('wordle-nyt-allowed-guesses-update-12546.txt')
 A = Actor(env,batch_size=5000, epsilon=0.1, learning_rate=1e-5, actor_repetition=10, critic_repetition=2,random_batch=True,sample_size=1000)
-A.train(epochs=300000, print_freq=5000, prune=False, display_progress_bar=False)
+A.train_IR(epochs=200000, print_freq=5000, prune=False, display_progress_bar=False)

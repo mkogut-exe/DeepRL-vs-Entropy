@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import datetime
 
 
 def align_training_episodes(first_file, second_file, output_file=None, episode_col=None):
@@ -71,12 +72,17 @@ def align_training_episodes(first_file, second_file, output_file=None, episode_c
 
     # Save to CSV
     if output_file is None:
-        output_file = f'aligned_{os.path.basename(first_file)}_and_{os.path.basename(second_file)}'
-    
+        # Use a short filename with a timestamp to avoid Windows path length issues
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        output_file = f'aligned_{timestamp}.csv'
+
     # Ensure output has .csv extension
     if not output_file.endswith('.csv'):
         output_file += '.csv'
-    
+
+    # Always save in the current directory to avoid FileNotFoundError due to missing folders
+    output_file = os.path.basename(output_file)
+
     result.to_csv(output_file, index=False)
 
     print(f"Aligned and merged training data saved to {output_file}")
@@ -89,8 +95,8 @@ def align_training_episodes(first_file, second_file, output_file=None, episode_c
 if __name__ == "__main__":
     # Call the function with file paths - update these paths as needed
     align_training_episodes(
-        'training_metrics_20250404172508_ARLGv1-win_epo-200000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000',
-        'training_metrics_20250405150745_ARLGv1-win_epo-500000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000'
+        'training_metrics_FINAL_20250518223616_ARLG-IR-win_epo-win_epo-200000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000',
+        'continuation_training_metrics_FINAL_20250522184720_ARLG-IR-win_epo-200000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000'
     )
     
     # Alternatively, to specify a different episode column:
