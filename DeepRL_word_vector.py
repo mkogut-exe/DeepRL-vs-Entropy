@@ -357,82 +357,69 @@ class Actor:
                     self.save_model(f'actor_critic_{episode + 1}{self.model_id}.pt')
                 self.save_stats(f'actor_critic_stats{self.model_id}.pkl')
 
-        def train_WR(self, epochs=500, print_freq=50, autosave=False, append_metrics=False, prune_amount=0.1,
-                     prune_freq=1000,
-                     sparsity_threshold=0.1, prune=False, display_progress_bar=False):
-            print("Training...")
-            self.prune_amount = prune_amount
-            self.prune_freq = prune_freq
-            self.sparsity_threshold = sparsity_threshold
-            self.prune = prune
-            self.model_id = create_model_id(epochs=epochs, actor_repetition=self.actor_repetition,
-                                            critic_repetition=self.critic_repetition, actor_network_size='1x256',
-                                            learning_rate=self.learning_rate, batch_size=self.batch_size)
-            total_wins = 0
-            batch_losses_actor = []
-            batch_losses_critic = []
+        # Process any remaining samples in the buffer at the end
+        while len(replay_buffer) >= 32:  # Process remaining data in small batches
+            mini_batch_size = min(1024, len(replay_buffer))
+            batch = replay_buffer[:mini_batch_size]
+            replay_buffer = replay_buffer[mini_batch_size:]
 
-            # Initialize replay buffer
-            replay_buffer = []
+            states, actions, rewards, next_states, old_probs, dones = zip(*batch)
+            self.batch_update(states, actions, rewards, next_states, old_probs, dones)
 
-            # Create or append to metrics file
-            with open(f'training_metrics{self.model_id}.csv', 'a' if append_metrics else 'w', newline='') as f:
-                writer = csv.writer(f)
-                if not append_metrics:
-                    writer.writerow(['Episode', 'Actor_Loss', 'Critic_Loss', 'Win_Rate'])
+        self.save_model(f'actor_critic_end{self.model_id}.pt')
+        self.save_stats(f'actor_critic_stats{self.model_id}.pkl')
+        print("Training finished.")
 
-            for episode in (tqdm(range(epochs)) if display_progress_bar else range(epochs)):
-                self.env.reset()
-                state = self.state()
-                last_correct = 0
-                last_in_word = 0
+    def train_WR(self, epochs=500, print_freq=50, autosave=False, append_metrics=False, prune_amount=0.1, prune_freq=1000,
+              sparsity_threshold=0.1, prune=False, display_progress_bar=False):
+        print("Training...")
+        self.prune_amount = prune_amount
+        self.prune_freq = prune_freq
+        self.sparsity_threshold = sparsity_threshold
+        self.prune = prune
+        self.model_id = create_model_id(epochs=epochs, actor_repetition=self.actor_repetition,
+                                        critic_repetition=self.critic_repetition, actor_network_size='1x256',
+                                        learning_rate=self.learning_rate, batch_size=self.batch_size)
+        total_wins = 0
+        batch_losses_actor = []
+        batch_losses_critic = []
 
-                for round in range(self.env.max_tries):
-                    action, old_prob = self.act()
-                    matches = self.env.guess(self.env.allowed_words[action])
-                    next_state = self.state()
-                    done = self.env.end
+        # Initialize replay buffer
+        replay_buffer = []
 
-                    if self.env.win:
-                        reward = 1.0
-                    else:
-                        reward = -1.0
+        # Create or append to metrics file
+        with open(f'training_metrics{self.model_id}.csv', 'a' if append_metrics else 'w', newline='') as f:
+            writer = csv.writer(f)
+            if not append_metrics:
+                writer.writerow(['Episode', 'Actor_Loss', 'Critic_Loss', 'Win_Rate'])
 
-                    last_correct = correct_position
-                    last_in_word = in_word
+        for episode in (tqdm(range(epochs)) if display_progress_bar else range(epochs)):
+            self.env.reset()
+            state = self.state()
+            last_correct = 0
+            last_in_word = 0
 
-                    # Add transition to replay buffer
-                    replay_buffer.append((state, action, reward, next_state, old_prob, done))
+            for round in range(self.env.max_tries):
+                action, old_prob = self.act()
+                matches = self.env.guess(self.env.allowed_words[action])
+                next_state = self.state()
+                done = self.env.end
 
-                    # Process in batches when buffer reaches batch size
-                    if len(replay_buffer) >= self.batch_size:
-                        batch = replay_buffer[:self.batch_size]
-                        replay_buffer = replay_buffer[self.batch_size:]
+                if self.env.win:
+                    reward = 1.0
+                else:
+                    reward = 0.0
 
-                        states, actions, rewards, next_states, old_probs, dones = zip(*batch)
-                        loss_actor, loss_critic = self.batch_update(states, actions, rewards, next_states, old_probs,
-                                                                    dones)
+                last_correct = correct_position
+                last_in_word = in_word
 
-                        batch_losses_actor.append(loss_actor)
-                        batch_losses_critic.append(loss_critic)
+                # Add transition to replay buffer
+                replay_buffer.append((state, action, reward, next_state, old_prob, done))
 
-                    if done:
-                        break
-
-                    state = next_state.clone()
-
-                # Update stats
-                total_wins += self.env.win
-                self.stats['wins'] += self.env.win
-                self.stats['total_games'] += 1
-                self.stats['tries_distribution'][self.env.try_count] += 1
-                self.stats['results'][self.env.word] = {'tries': self.env.try_count, 'win': self.env.win}
-
-                # Process remaining samples if enough have accumulated
-                if len(replay_buffer) >= min(1024, self.batch_size):  # Use smaller mini-batches for leftover data
-                    mini_batch_size = min(1024, len(replay_buffer))
-                    batch = replay_buffer[:mini_batch_size]
-                    replay_buffer = replay_buffer[mini_batch_size:]
+                # Process in batches when buffer reaches batch size
+                if len(replay_buffer) >= self.batch_size:
+                    batch = replay_buffer[:self.batch_size]
+                    replay_buffer = replay_buffer[self.batch_size:]
 
                     states, actions, rewards, next_states, old_probs, dones = zip(*batch)
                     loss_actor, loss_critic = self.batch_update(states, actions, rewards, next_states, old_probs, dones)
@@ -440,24 +427,49 @@ class Actor:
                     batch_losses_actor.append(loss_actor)
                     batch_losses_critic.append(loss_critic)
 
-                # Print stats and save metrics
-                if (episode + 1) % print_freq == 0:
-                    avg_loss_actor = np.mean(batch_losses_actor) if batch_losses_actor else 0
-                    avg_loss_critic = np.mean(batch_losses_critic) if batch_losses_critic else 0
-                    win_rate = total_wins / print_freq
+                if done:
+                    break
 
-                    self.save_training_metrics(episode + 1, avg_loss_actor, avg_loss_critic, win_rate)
+                state = next_state.clone()
 
-                    print(f"Episode {episode + 1}/{epochs} - Actor Loss: {avg_loss_actor:.4f}, "
-                          f"Critic Loss: {avg_loss_critic:.4f}, Win Rate: {win_rate:.4f}")
+            # Update stats
+            total_wins += self.env.win
+            self.stats['wins'] += self.env.win
+            self.stats['total_games'] += 1
+            self.stats['tries_distribution'][self.env.try_count] += 1
+            self.stats['results'][self.env.word] = {'tries': self.env.try_count, 'win': self.env.win}
 
-                    total_wins = 0
-                    batch_losses_actor = []
-                    batch_losses_critic = []
+            # Process remaining samples if enough have accumulated
+            if len(replay_buffer) >= min(1024, self.batch_size):  # Use smaller mini-batches for leftover data
+                mini_batch_size = min(1024, len(replay_buffer))
+                batch = replay_buffer[:mini_batch_size]
+                replay_buffer = replay_buffer[mini_batch_size:]
 
-                    if autosave:
-                        self.save_model(f'actor_critic_{episode + 1}{self.model_id}.pt')
-                    self.save_stats(f'actor_critic_stats{self.model_id}.pkl')
+                states, actions, rewards, next_states, old_probs, dones = zip(*batch)
+                loss_actor, loss_critic = self.batch_update(states, actions, rewards, next_states, old_probs, dones)
+
+                batch_losses_actor.append(loss_actor)
+                batch_losses_critic.append(loss_critic)
+
+            # Print stats and save metrics
+            if (episode + 1) % print_freq == 0:
+                avg_loss_actor = np.mean(batch_losses_actor) if batch_losses_actor else 0
+                avg_loss_critic = np.mean(batch_losses_critic) if batch_losses_critic else 0
+                win_rate = total_wins / print_freq
+
+                self.save_training_metrics(episode + 1, avg_loss_actor, avg_loss_critic, win_rate)
+
+                print(f"Episode {episode + 1}/{epochs} - Actor Loss: {avg_loss_actor:.4f}, "
+                      f"Critic Loss: {avg_loss_critic:.4f}, Win Rate: {win_rate:.4f}")
+
+                total_wins = 0
+                batch_losses_actor = []
+                batch_losses_critic = []
+
+                if autosave:
+                    self.save_model(f'actor_critic_{episode + 1}{self.model_id}.pt')
+                self.save_stats(f'actor_critic_stats{self.model_id}.pkl')
+
         # Process any remaining samples in the buffer at the end
         while len(replay_buffer) >= 32:  # Process remaining data in small batches
             mini_batch_size = min(1024, len(replay_buffer))
