@@ -244,7 +244,7 @@ class Actor:
         self.sparsity_threshold = sparsity_threshold
         self.prune = prune
         self.model_id = create_model_id(epochs=epochs, actor_repetition=self.actor_repetition,
-                                        critic_repetition=self.critic_repetition, actor_network_size='1x256',
+                                        critic_repetition=self.critic_repetition, actor_network_size='7x256',
                                         learning_rate=self.learning_rate, batch_size=self.batch_size)
         total_wins = 0
         batch_losses_actor = []
@@ -441,5 +441,5 @@ class Actor:
 
 env = Environment('wordle-nyt-allowed-guesses-update-12546.txt')
 A = Actor(env,batch_size=5000, epsilon=0.1, learning_rate=1e-5, actor_repetition=10, critic_repetition=2,random_batch=True,sample_size=1000)
-A.continue_training(model_path='actor_critic_end_FINAL_20250703140338_WV-WR-win_epo-200000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000.pt', stats_path='actor_critic_stats_FINAL_20250703140338_WV-WR-win_epo-200000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000.pkl', epochs=200000, print_freq=5000,batch_size=5000,random_batch=True,sample_size=1000, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2)
-#A.train_WR(epochs=200000, print_freq=5000, prune=False, display_progress_bar=False)
+#A.continue_training(model_path='actor_critic_end_FINAL_20250703140338_WV-WR-win_epo-200000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000.pt', stats_path='actor_critic_stats_FINAL_20250703140338_WV-WR-win_epo-200000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000.pkl', epochs=200000, print_freq=5000,batch_size=5000,random_batch=True,sample_size=1000, learning_rate=1e-5, epsilon=0.1, actor_repetition=10, critic_repetition=2)
+A.train_WR(epochs=400000, print_freq=5000, prune=False, display_progress_bar=False)
