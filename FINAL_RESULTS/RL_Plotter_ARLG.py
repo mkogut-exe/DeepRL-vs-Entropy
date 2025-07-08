@@ -26,7 +26,7 @@ def plot_training_metrics(file_path='training_metrics.csv'):
     ax1.plot(df['Episode'], df['Actor_Loss'], 'b-', alpha=0.3)
     ax1.plot(df['Episode'], df['Actor_Loss_MA'], 'b-', linewidth=2, label='Actor Loss')
     ax1.set_ylabel('Actor Loss')
-    ax1.set_title('Wordle RL Training Metrics')
+    ax1.set_title('Wordle WV-IR-win Training Metrics')
     ax1.legend()
     ax1.grid(True)
 
@@ -55,16 +55,19 @@ def plot_training_metrics(file_path='training_metrics.csv'):
 
 
     # Add baseline for random guessing
-    # all 0.4229
-    ax3.axhline(y=0.4229, color='gray', linestyle='--', alpha=0.7, label='Random Baseline')
+    # random 0.4229
+    # entropy maximizer 0.8022
+    ax3.axhline(y=0.4229, color='gray', linestyle='--', alpha=0.7, label='Random Baseline Win Rate')
     ax3.legend()
+    """ax3.axhline(y=0.8022, color='#1ff0ff',lw=2, linestyle='-', alpha=1, label='Entropy Maximizer Win Rate')
+    ax3.legend()"""
 
     # Adjust y-axis limits to ensure data is visible
     win_min = max(0, df['Win_Rate'].min() * 0.95)   # Lower bound with 5% margin
     win_max = min(1, df['Win_Rate'].max() * 1.05)  # Upper bound with 5% margin
     ax3.set_ylim(win_min, win_max)
 
-    
+
     # Plot rewards
     ax4.plot(df['Episode'], df['Reward'], 'purple', alpha=0.3)
     ax4.plot(df['Episode'], df['Reward_MA'], 'purple', linewidth=2, label='Reward')
@@ -72,7 +75,7 @@ def plot_training_metrics(file_path='training_metrics.csv'):
     ax4.set_ylabel('Reward')
     ax4.grid(True)
     ax4.legend()
-    
+
     # Set y-axis limits for rewards
     reward_min = df['Reward'].min() * 0.99
     reward_max = df['Reward'].max() * 1.01
@@ -87,4 +90,4 @@ def plot_training_metrics(file_path='training_metrics.csv'):
 
 
 if __name__ == "__main__":
-    plot_training_metrics(file_path='aligned_training_metrics_FINAL_20250518223616_ARLG-IR-win_epo-win_epo-400000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000.csv')
+    plot_training_metrics(file_path='training_metrics_FINAL_20250703135947_WV-IR-win_epo-200000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000.csv')

@@ -410,9 +410,6 @@ class Actor:
                 else:
                     reward = 0.0
 
-                last_correct = correct_position
-                last_in_word = in_word
-
                 # Add transition to replay buffer
                 replay_buffer.append((state, action, reward, next_state, old_prob, done))
 
