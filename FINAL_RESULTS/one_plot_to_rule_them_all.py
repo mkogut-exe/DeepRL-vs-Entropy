@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import os
 
-def plot_win_rates_from_multiple_files(csv_files):
+def plot_win_rates_from_multiple_files(csv_files, output_path = 'out.png',EM = False):
     plt.figure(figsize=(12, 8))
 
     all_dfs = []
@@ -27,12 +27,13 @@ def plot_win_rates_from_multiple_files(csv_files):
 
     plt.ylabel('Win Rate')
     plt.xlabel('Episode')
-    plt.title('Wordle RL Training Win Rates')
+
     plt.grid(True)
 
     # Add baselines
     plt.axhline(y=0.4229, color='gray', linestyle='--', alpha=0.7, label='Random Baseline Win Rate')
-    plt.axhline(y=0.8022, color='#1ff0ff',lw=2, linestyle='-', alpha=1, label='Entropy Maximizer Win Rate')
+    if EM:
+        plt.axhline(y=0.8022, color='#1ff0ff',lw=2, linestyle='-', alpha=1, label='Entropy Maximizer Win Rate')
 
     plt.legend()
 
@@ -40,7 +41,7 @@ def plot_win_rates_from_multiple_files(csv_files):
     win_max = min(1, max_win_rate * 1.05)
     plt.ylim(win_min, win_max)
 
-    output_path = 'all_win_rates_400k.png'
+
     plt.tight_layout()
     plt.savefig(output_path)
     print(f"Plot saved as '{output_path}'")
@@ -48,7 +49,8 @@ def plot_win_rates_from_multiple_files(csv_files):
 
 if __name__ == "__main__":
     # List of CSV files to plot. Add more entries to this list to plot more results.
-    files_to_plot = [
+    output_path_all = 'all_win_rates_400k.png'
+    plot_all = [
         {
             "path": "training_metrics_FINAL_20250704141427_WV-WR0-win_epo-400000_AR-10_CR-2_AS-7x256-Lr-1e-05-Bs-5000.csv",
             "label": "WV-WR0"
@@ -57,6 +59,43 @@ if __name__ == "__main__":
             "path": "training_metrics_FINAL_20250705182425_WV-WR+-1-win_epo-400000_AR-10_CR-2_AS-7x256-Lr-1e-05-Bs-5000.csv",
             "label": "WV-WR0"
         },
+        {
+            "path": "training_metrics_FINAL_20250518120513_non-ARLG-IR-win_epo-200000_AR-10_CR-2_AS-4x256-Lr-1e-05-Bs-5000.csv",
+            "label": "non-ARLG-IR"
+        },
+        {
+            "path": "training_metrics_FINAL_20250708155926_non-ARLG-WR0-win_epo-200000_AR-10_CR-2_AS-4x256-Lr-1e-05-Bs-5000.csv",
+            "label": "non-ARLG-WR0"
+        },
+        {
+            "path": "aligned_training_metrics_FINAL_20250518223616_ARLG-IR-win_epo-win_epo-400000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000.csv",
+            "label": "ARLG-IR"
+        },
+        {
+            "path": "training_metrics_FINAL_20250522184804_ARLG-IR-wd-win_epo-400000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000-Dec--0.005.csv",
+            "label": "ARLG-IR-wd"
+        },
+        {
+            "path": "training_metrics_FINAL_20250522185037_ARLG-WR+-1-win_only_epo-400000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000.csv",
+            "label": "ARLG-WR+-1"
+        }
+
+    ]
+    output_path_WV400k = 'output_path_WV400k.png'
+    plot_WV400k = [
+        {
+            "path": "training_metrics_FINAL_20250704141427_WV-WR0-win_epo-400000_AR-10_CR-2_AS-7x256-Lr-1e-05-Bs-5000.csv",
+            "label": "WV-WR0"
+        },
+        {
+            "path": "training_metrics_FINAL_20250705182425_WV-WR+-1-win_epo-400000_AR-10_CR-2_AS-7x256-Lr-1e-05-Bs-5000.csv",
+            "label": "WV-WR+-1"
+        }
+
+
+    ]
+    output_path_LG400k = 'output_path_LG400k.png'
+    plot_LG400k = [
         {
             "path": "training_metrics_FINAL_20250518120513_non-ARLG-IR-win_epo-200000_AR-10_CR-2_AS-4x256-Lr-1e-05-Bs-5000.csv",
             "label": "non-ARLG-IR"
@@ -71,7 +110,16 @@ if __name__ == "__main__":
         },
         {
             "path": "training_metrics_FINAL_20250522185037_ARLG-WR+-1-win_only_epo-400000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000.csv",
-            "label": "ARLG-WR-win"
+            "label": "ARLG-WR+-1"
         }
     ]
-    plot_win_rates_from_multiple_files(files_to_plot)
+    output_path_WV2000k = 'WV2000k.png'
+    plot_WV2000k = [
+        {
+            "path": "aligned_20250712_130430_FINAL_WV-WR0-win_epo-2000000_AR-10_CR-2_AS-7x256-Lr-1e-05-Bs-5000.csv",
+            "label": "WV-WR0"
+        }
+
+    ]
+
+    plot_win_rates_from_multiple_files(plot_all , output_path_all, EM=1)

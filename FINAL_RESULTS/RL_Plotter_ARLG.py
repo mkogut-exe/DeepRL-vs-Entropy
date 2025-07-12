@@ -26,7 +26,7 @@ def plot_training_metrics(file_path='training_metrics.csv'):
     ax1.plot(df['Episode'], df['Actor_Loss'], 'b-', alpha=0.3)
     ax1.plot(df['Episode'], df['Actor_Loss_MA'], 'b-', linewidth=2, label='Actor Loss')
     ax1.set_ylabel('Actor Loss')
-    ax1.set_title('Wordle WV-IR-win Training Metrics')
+    ax1.set_title('Wordle ARLG-IR Training Metrics')
     ax1.legend()
     ax1.grid(True)
 
@@ -90,4 +90,4 @@ def plot_training_metrics(file_path='training_metrics.csv'):
 
 
 if __name__ == "__main__":
-    plot_training_metrics(file_path='training_metrics_FINAL_20250703135947_WV-IR-win_epo-200000_AR-10_CR-2_AS-1x256-Lr-1e-05-Bs-5000.csv')
+    plot_training_metrics(file_path='training_metrics_FINAL_20250708155926_non-ARLG-WR0-win_epo-200000_AR-10_CR-2_AS-4x256-Lr-1e-05-Bs-5000.csv')
