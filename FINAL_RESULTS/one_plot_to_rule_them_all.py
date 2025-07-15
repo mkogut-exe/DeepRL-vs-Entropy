@@ -113,13 +113,13 @@ if __name__ == "__main__":
             "label": "ARLG-WR+-1"
         }
     ]
-    output_path_WV2000k = 'WV2000k.png'
-    plot_WV2000k = [
+    output_path_WV2400k = 'WV2400k.png'
+    plot_WV2400k = [
         {
-            "path": "aligned_20250712_130430_FINAL_WV-WR0-win_epo-2000000_AR-10_CR-2_AS-7x256-Lr-1e-05-Bs-5000.csv",
+            "path": "aligned_20250715_11295220250714120755_WV-WR0-win_epo-2400000_AR-10_CR-2_AS-7x256-Lr-2mil_1e-5-200k_1e-Bs-5000.csv",
             "label": "WV-WR0"
         }
 
     ]
 
-    plot_win_rates_from_multiple_files(plot_all , output_path_all, EM=1)
+    plot_win_rates_from_multiple_files(plot_WV2400k , output_path_WV2400k, EM=1)

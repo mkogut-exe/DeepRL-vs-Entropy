@@ -95,8 +95,8 @@ def align_training_episodes(first_file, second_file, output_file=None, episode_c
 if __name__ == "__main__":
     # Call the function with file paths - update these paths as needed
     align_training_episodes(
-        'aligned_20250710_202708_FINAL_WV-WR0-win_epo-1500000_AR-10_CR-2_AS-7x256-Lr-1e-05-Bs-5000',
-        'training_metrics_FINAL_20250710141409_WV-WR0-win_epo-500000_AR-10_CR-2_AS-7x256-Lr-1e-05-Bs-5000'
+        'aligned_20250715_112909',
+        'training_metrics_FINAL_20250714120755_WV-WR0-win_epo-200000_AR-10_CR-2_AS-7x256-Lr-1e-07-Bs-5000'
     )
     
     # Alternatively, to specify a different episode column:

@@ -76,4 +76,4 @@ def plot_training_metrics(file_path='training_metrics.csv'):
 
 
 if __name__ == "__main__":
-    plot_training_metrics(file_path='aligned_20250712_130430_FINAL_WV-WR0-win_epo-2000000_AR-10_CR-2_AS-7x256-Lr-1e-05-Bs-5000.csv')
+    plot_training_metrics(file_path='aligned_20250715_11295220250714120755_WV-WR0-win_epo-2400000_AR-10_CR-2_AS-7x256-Lr-2mil_1e-5-200k_1e-Bs-5000.csv')
