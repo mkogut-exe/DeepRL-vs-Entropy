@@ -25,7 +25,7 @@ def plot_training_metrics(file_path='training_metrics.csv'):
     ax1.plot(df['Episode'], df['Actor_Loss'], 'b-', alpha=0.3)
     ax1.plot(df['Episode'], df['Actor_Loss_MA'], 'b-', linewidth=2, label='Actor Loss')
     ax1.set_ylabel('Actor Loss')
-    ax1.set_title('Wordle WV-IR-win Training Metrics')
+    ax1.set_title('Wordle WV-WR0 Training Metrics')
     ax1.legend()
     ax1.grid(True)
 
@@ -58,8 +58,8 @@ def plot_training_metrics(file_path='training_metrics.csv'):
     # entropy maximizer 0.8022
     ax3.axhline(y=0.4229, color='gray', linestyle='--', alpha=0.7, label='Random Baseline Win Rate')
     ax3.legend()
-    """ax3.axhline(y=0.8022, color='#1ff0ff',lw=2, linestyle='-', alpha=1, label='Entropy Maximizer Win Rate')
-    ax3.legend()"""
+    ax3.axhline(y=0.8022, color='#1ff0ff',lw=2, linestyle='-', alpha=1, label='Entropy Maximizer Win Rate')
+    ax3.legend()
 
     # Adjust y-axis limits to ensure data is visible
     win_min = max(0, df['Win_Rate'].min() * 0.95)   # Lower bound with 5% margin
@@ -76,4 +76,4 @@ def plot_training_metrics(file_path='training_metrics.csv'):
 
 
 if __name__ == "__main__":
-    plot_training_metrics(file_path='training_metrics_FINAL_20250705182425_WV-WR+-1-win_epo-400000_AR-10_CR-2_AS-7x256-Lr-1e-05-Bs-5000.csv')
+    plot_training_metrics(file_path='aligned_20250712_130430_FINAL_WV-WR0-win_epo-2000000_AR-10_CR-2_AS-7x256-Lr-1e-05-Bs-5000.csv')
